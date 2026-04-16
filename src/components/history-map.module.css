@@ -1,0 +1,32 @@
+.map {
+  height: 100%;
+  min-height: 460px;
+  width: 100%;
+  border-radius: 28px;
+  overflow: hidden;
+}
+
+.popup {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+}
+
+.markerBadge {
+  background: transparent;
+  border: 0;
+}
+
+.markerInner {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #0f172a;
+  color: #fff7ed;
+  border: 2px solid #ffedd5;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.2);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
