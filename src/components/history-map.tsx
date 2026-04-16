@@ -36,6 +36,123 @@ type HistoryMapProps = {
   onSelectPoint: (pointId: number) => void;
 };
 
+function haversineMeters(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+) {
+  const R = 6_371_000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * Remove GPS spike outliers.
+ * A spike is a point that jumps far from both its neighbours while
+ * those neighbours remain close to each other — a clear sign of
+ * momentary GPS noise rather than real movement.
+ */
+function filterOutliers(points: GpsHistoryPoint[]): GpsHistoryPoint[] {
+  if (points.length < 3) return [...points];
+
+  const SPIKE_METERS = 80;
+
+  const cleaned: GpsHistoryPoint[] = [points[0]];
+
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const next = points[i + 1];
+
+    const dPrev = haversineMeters(
+      prev.latitude, prev.longitude, curr.latitude, curr.longitude,
+    );
+    const dNext = haversineMeters(
+      curr.latitude, curr.longitude, next.latitude, next.longitude,
+    );
+    const dNeighbours = haversineMeters(
+      prev.latitude, prev.longitude, next.latitude, next.longitude,
+    );
+
+    // Point is a spike if it's far from both neighbours
+    // but the neighbours themselves are close to each other
+    const isSpike =
+      dPrev > SPIKE_METERS &&
+      dNext > SPIKE_METERS &&
+      dNeighbours < Math.max(dPrev, dNext) * 0.5;
+
+    if (!isSpike) {
+      cleaned.push(curr);
+    }
+  }
+
+  cleaned.push(points[points.length - 1]);
+  return cleaned;
+}
+
+/**
+ * Split points into continuous route segments.
+ * A new segment starts when two consecutive points imply an
+ * unrealistically high speed or have a very large absolute gap,
+ * which indicates a GPS jump or data from a separate trip.
+ */
+function buildSegments(points: GpsHistoryPoint[]): LatLngExpression[][] {
+  if (points.length === 0) return [];
+
+  const MAX_REALISTIC_SPEED_KMH = 150;
+  const MAX_ABSOLUTE_GAP_METERS = 500;
+
+  const segments: LatLngExpression[][] = [];
+  let current: LatLngExpression[] = [
+    [points[0].latitude, points[0].longitude],
+  ];
+
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const dist = haversineMeters(
+      prev.latitude,
+      prev.longitude,
+      curr.latitude,
+      curr.longitude,
+    );
+    const timeDiffSec =
+      Math.abs(
+        Date.parse(curr.gpsTimestamp) - Date.parse(prev.gpsTimestamp),
+      ) / 1000;
+
+    const impliedSpeedKmh =
+      timeDiffSec > 0 ? (dist / timeDiffSec) * 3.6 : Infinity;
+
+    // Break the segment when the jump is unrealistic
+    const shouldBreak =
+      impliedSpeedKmh > MAX_REALISTIC_SPEED_KMH ||
+      dist > MAX_ABSOLUTE_GAP_METERS;
+
+    if (shouldBreak) {
+      if (current.length > 0) {
+        segments.push(current);
+      }
+      current = [];
+    }
+
+    current.push([curr.latitude, curr.longitude]);
+  }
+
+  if (current.length > 0) {
+    segments.push(current);
+  }
+
+  return segments;
+}
+
 function formatTimestamp(value: string) {
   return new Date(value).toLocaleString();
 }
@@ -58,9 +175,16 @@ function FitBounds({
       points.find((point) => point.id === selectedPointId) ?? null;
 
     if (selectedPoint) {
-      map.flyTo([selectedPoint.latitude, selectedPoint.longitude], 17, {
-        duration: 0.7,
-      });
+      if (map.getZoom() < 16) {
+        map.flyTo([selectedPoint.latitude, selectedPoint.longitude], 17, {
+          duration: 0.7,
+        });
+      } else {
+        map.panTo([selectedPoint.latitude, selectedPoint.longitude], {
+          animate: true,
+          duration: 0.3,
+        });
+      }
       return;
     }
 
@@ -91,26 +215,40 @@ export function HistoryMap({
   selectedPointId,
   onSelectPoint,
 }: HistoryMapProps) {
-  const positions = useMemo<LatLngExpression[]>(
-    () => points.map((point) => [point.latitude, point.longitude]),
-    [points],
-  );
+  const cleanedPoints = useMemo(() => filterOutliers(points), [points]);
+  const segments = useMemo(() => buildSegments(cleanedPoints), [cleanedPoints]);
 
-  const center = positions[0] ?? ([-6.2038, 106.7854] as LatLngExpression);
+  const center: LatLngExpression =
+    points.length > 0
+      ? [points[0].latitude, points[0].longitude]
+      : [-6.2038, 106.7854];
   const startPoint = points[0] ?? null;
   const endPoint = points.at(-1) ?? null;
 
   return (
     <MapContainer center={center} zoom={15} className={styles.map} scrollWheelZoom>
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution="&copy; Google Maps"
+        url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
       />
       <FitBounds points={points} selectedPointId={selectedPointId} />
 
-      {positions.length > 1 ? (
-        <Polyline positions={positions} pathOptions={{ color: "#ff6b35", weight: 4 }} />
-      ) : null}
+      {segments.map((segment, idx) =>
+        segment.length > 1 ? (
+          <Polyline
+            key={idx}
+            positions={segment}
+            pathOptions={{
+              color: "#ff6b35",
+              weight: 4,
+              lineCap: "round",
+              lineJoin: "round",
+              opacity: 0.85,
+            }}
+            smoothFactor={1.5}
+          />
+        ) : null,
+      )}
 
       {startPoint ? (
         <Marker
@@ -140,7 +278,7 @@ export function HistoryMap({
         </Marker>
       ) : null}
 
-      {points.map((point) => {
+      {cleanedPoints.map((point) => {
         const isSelected = point.id === selectedPointId;
 
         return (

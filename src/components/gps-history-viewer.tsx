@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 
 import type { GpsHistoryDataset, GpsHistoryPoint } from "@/types/gps";
 import styles from "./gps-history-viewer.module.css";
@@ -112,6 +112,35 @@ export function GpsHistoryViewer({ dataset }: ViewerProps) {
   const [startDateTime, setStartDateTime] = useState(initialRange.start);
   const [endDateTime, setEndDateTime] = useState(initialRange.end);
   const [selectedPointId, setSelectedPointId] = useState<number | null>(null);
+  
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  
+  const [showShareWidget, setShowShareWidget] = useState(false);
+  const [shareDuration, setShareDuration] = useState<number>(1);
+  const [isCopied, setIsCopied] = useState(false);
+  
+  const [isSharedLink, setIsSharedLink] = useState(false);
+  const [isLinkExpired, setIsLinkExpired] = useState(false);
+
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+    const searchParams = new URLSearchParams(window.location.search);
+    const imeiQuery = searchParams.get("imei");
+    const expiresQuery = searchParams.get("expires");
+
+    if (imeiQuery && expiresQuery) {
+      setIsSharedLink(true);
+      if (Date.now() > parseInt(expiresQuery, 10)) {
+        setIsLinkExpired(true);
+      } else {
+        setSelectedImei(imeiQuery);
+        // Start simulation right away for shared viewer
+        setIsPlaying(true);
+      }
+    }
+  }, []);
 
   const pointsForImei = useMemo(
     () => allPoints.filter((point) => point.imei === selectedImei),
@@ -128,16 +157,41 @@ export function GpsHistoryViewer({ dataset }: ViewerProps) {
       return [];
     }
 
-    return pointsForImei.filter((point) => {
-      const timestamp = Date.parse(point.gpsTimestamp || point.serverReceivedAt);
-      const startsAfter =
-        startDateTime === "" || timestamp >= Date.parse(startDateTime);
-      const endsBefore =
-        endDateTime === "" || timestamp <= Date.parse(endDateTime);
+    return pointsForImei
+      .filter((point) => {
+        const timestamp = Date.parse(point.gpsTimestamp || point.serverReceivedAt);
+        const startsAfter =
+          startDateTime === "" || timestamp >= Date.parse(startDateTime);
+        const endsBefore =
+          endDateTime === "" || timestamp <= Date.parse(endDateTime);
 
-      return startsAfter && endsBefore;
-    });
+        return startsAfter && endsBefore;
+      })
+      .sort((a, b) => Date.parse(a.gpsTimestamp) - Date.parse(b.gpsTimestamp));
   }, [endDateTime, isInvalidRange, pointsForImei, startDateTime]);
+
+  useEffect(() => {
+    if (!isPlaying || filteredPoints.length === 0) {
+      return;
+    }
+
+    const intervalMs = 1000 / playbackSpeed;
+    const intervalId = setInterval(() => {
+      setSelectedPointId((currentId) => {
+        const targetId = currentId ?? filteredPoints[0].id;
+        const currentIndex = filteredPoints.findIndex((p) => p.id === targetId);
+        
+        if (currentIndex === -1 || currentIndex === filteredPoints.length - 1) {
+          setIsPlaying(false);
+          return targetId;
+        }
+
+        return filteredPoints[currentIndex + 1].id;
+      });
+    }, intervalMs);
+
+    return () => clearInterval(intervalId);
+  }, [isPlaying, playbackSpeed, filteredPoints]);
 
   const activeSelectedPointId = filteredPoints.some(
     (point) => point.id === selectedPointId,
@@ -145,7 +199,16 @@ export function GpsHistoryViewer({ dataset }: ViewerProps) {
     ? selectedPointId
     : (filteredPoints.at(-1)?.id ?? null);
 
-  const chartData = filteredPoints.map((point) => ({
+  const selectedPointIndex = filteredPoints.findIndex(
+    (p) => p.id === activeSelectedPointId,
+  );
+  
+  const visiblePoints =
+    selectedPointIndex === -1
+      ? filteredPoints
+      : filteredPoints.slice(0, selectedPointIndex + 1);
+
+  const chartData = visiblePoints.map((point) => ({
     id: point.id,
     time: new Date(point.gpsTimestamp).toLocaleTimeString([], {
       hour: "2-digit",
@@ -157,6 +220,37 @@ export function GpsHistoryViewer({ dataset }: ViewerProps) {
 
   const selectedPoint =
     filteredPoints.find((point) => point.id === activeSelectedPointId) ?? null;
+
+  if (!isMounted) {
+    return (
+      <main className={styles.page}>
+        <section className={styles.shell}>
+          <div className={styles.emptyState}>
+            <div>
+              <p className={styles.stateTitle}>Loading viewer...</p>
+              <p>Preparing map and location history.</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (isLinkExpired) {
+    return (
+      <main className={styles.page}>
+        <section className={styles.shell}>
+          <div className={styles.expiredState}>
+            <h2>Link Expired ⏰</h2>
+            <p>
+              This live location tracking link has expired and is no longer valid.
+              Please request a new tracking link from the vehicle owner.
+            </p>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   if (dataset.status === "error" && dataset.points.length === 0) {
     return (
@@ -177,7 +271,18 @@ export function GpsHistoryViewer({ dataset }: ViewerProps) {
     <main className={styles.page}>
       <section className={styles.shell}>
         <header className={styles.hero}>
-          <span className={styles.eyebrow}>GPS History Viewer</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className={styles.eyebrow}>GPS History Viewer</span>
+            {!isSharedLink && (
+              <button
+                className={styles.shareDurationBtnActive}
+                style={{ borderRadius: '99px', padding: '0.6rem 1rem' }}
+                onClick={() => setShowShareWidget(!showShareWidget)}
+              >
+                Share Live Location 🔗
+              </button>
+            )}
+          </div>
           <h1>Historical route playback without the backend wait.</h1>
           <p>
             This prototype reads normalized location history from a local JSON file,
@@ -192,68 +297,160 @@ export function GpsHistoryViewer({ dataset }: ViewerProps) {
             </article>
             <article className={styles.summaryCard}>
               <span>Visible points</span>
-              <strong>{filteredPoints.length}</strong>
+              <strong>
+                {visiblePoints.length} <small style={{ fontSize: "1rem", color: "var(--ink-3)" }}>/ {filteredPoints.length}</small>
+              </strong>
             </article>
             <article className={styles.summaryCard}>
               <span>Approx. route length</span>
-              <strong>{formatDistance(filteredPoints)}</strong>
+              <strong>{formatDistance(visiblePoints)}</strong>
             </article>
             <article className={styles.summaryCard}>
               <span>Peak speed</span>
               <strong>
-                {filteredPoints.length === 0
+                {visiblePoints.length === 0
                   ? "0 km/h"
-                  : `${Math.max(...filteredPoints.map((point) => point.speedKph))} km/h`}
+                  : `${Math.max(...visiblePoints.map((point) => point.speedKph))} km/h`}
               </strong>
             </article>
           </div>
         </header>
+        {!isSharedLink ? (
+          <section className={styles.filterBar}>
+            <div className={styles.field}>
+              <label htmlFor="imei">Device IMEI</label>
+              <select
+                id="imei"
+                value={selectedImei}
+                onChange={(event) => {
+                  const nextImei = event.target.value;
+                  const nextPoints = allPoints.filter((point) => point.imei === nextImei);
+                  const nextRange = buildRange(nextPoints);
 
-        <section className={styles.filterBar}>
-          <div className={styles.field}>
-            <label htmlFor="imei">Device IMEI</label>
-            <select
-              id="imei"
-              value={selectedImei}
-              onChange={(event) => {
-                const nextImei = event.target.value;
-                const nextPoints = allPoints.filter((point) => point.imei === nextImei);
-                const nextRange = buildRange(nextPoints);
+                  setSelectedImei(nextImei);
+                  setStartDateTime(nextRange.start);
+                  setEndDateTime(nextRange.end);
+                  setSelectedPointId(nextPoints.at(-1)?.id ?? null);
+                }}
+              >
+                {imeis.map((imei) => (
+                  <option key={imei} value={imei}>
+                    {imei}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                setSelectedImei(nextImei);
-                setStartDateTime(nextRange.start);
-                setEndDateTime(nextRange.end);
-                setSelectedPointId(nextPoints.at(-1)?.id ?? null);
-              }}
-            >
-              {imeis.map((imei) => (
-                <option key={imei} value={imei}>
-                  {imei}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div className={styles.field}>
+              <label htmlFor="startDateTime">Start date/time</label>
+              <input
+                id="startDateTime"
+                type="datetime-local"
+                value={startDateTime}
+                onChange={(event) => setStartDateTime(event.target.value)}
+              />
+            </div>
 
-          <div className={styles.field}>
-            <label htmlFor="startDateTime">Start date/time</label>
-            <input
-              id="startDateTime"
-              type="datetime-local"
-              value={startDateTime}
-              onChange={(event) => setStartDateTime(event.target.value)}
-            />
-          </div>
+            <div className={styles.field}>
+              <label htmlFor="endDateTime">End date/time</label>
+              <input
+                id="endDateTime"
+                type="datetime-local"
+                value={endDateTime}
+                onChange={(event) => setEndDateTime(event.target.value)}
+              />
+            </div>
+          </section>
+        ) : null}
 
-          <div className={styles.field}>
-            <label htmlFor="endDateTime">End date/time</label>
-            <input
-              id="endDateTime"
-              type="datetime-local"
-              value={endDateTime}
-              onChange={(event) => setEndDateTime(event.target.value)}
-            />
-          </div>
-        </section>
+        {!isSharedLink && showShareWidget ? (
+          <section className={styles.shareWidget}>
+            <div className={styles.shareHeader}>
+              <h3>🔗 Share Live Location</h3>
+              <div className={styles.shareDurations}>
+                {[1, 8, 12].map((hours) => (
+                  <button
+                    key={hours}
+                    className={`${styles.shareDurationBtn} ${
+                      shareDuration === hours ? styles.shareDurationBtnActive : ""
+                    }`}
+                    onClick={() => {
+                      setShareDuration(hours);
+                      setIsCopied(false);
+                    }}
+                  >
+                    {hours} {hours === 1 ? "Hour" : "Hours"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className={styles.shareLinkBox}>
+              <input
+                type="text"
+                readOnly
+                className={styles.shareLinkInput}
+                value={`${window.location.origin}${window.location.pathname}?imei=${selectedImei}&expires=${
+                  Date.now() + shareDuration * 60 * 60 * 1000
+                }`}
+              />
+              <button
+                className={`${styles.copyBtn} ${isCopied ? styles.copyBtnSuccess : ""}`}
+                onClick={() => {
+                  const url = `${window.location.origin}${window.location.pathname}?imei=${selectedImei}&expires=${
+                    Date.now() + shareDuration * 60 * 60 * 1000
+                  }`;
+                  navigator.clipboard.writeText(url).then(() => {
+                    setIsCopied(true);
+                    setTimeout(() => setIsCopied(false), 3000);
+                  });
+                }}
+              >
+                {isCopied ? "Copied!" : "Copy Link"}
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {!isInvalidRange && filteredPoints.length > 0 ? (
+          <section className={styles.playbackBar}>
+            <div className={styles.playbackControls}>
+              <button
+                type="button"
+                className={`${styles.playbackBtn} ${isPlaying ? styles.playbackBtnActive : ""}`}
+                onClick={() => {
+                  if (!isPlaying) {
+                    const isAtEnd =
+                      activeSelectedPointId ===
+                      (filteredPoints.at(-1)?.id ?? null);
+                    if (isAtEnd && filteredPoints.length > 0) {
+                      setSelectedPointId(filteredPoints[0].id);
+                    }
+                  }
+                  setIsPlaying(!isPlaying);
+                }}
+              >
+                {isPlaying ? "Pause Simulation" : "Simulate Live Tracking"}
+              </button>
+              
+              <select
+                className={styles.playbackSpeedSelect}
+                value={playbackSpeed}
+                onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+              >
+                <option value={1}>1x Speed</option>
+                <option value={2}>2x Speed</option>
+                <option value={5}>5x Speed</option>
+                <option value={10}>10x Speed</option>
+                <option value={20}>20x Speed</option>
+              </select>
+            </div>
+            <div className={styles.playbackProgress}>
+              Point{" "}
+              {filteredPoints.findIndex((p) => p.id === activeSelectedPointId) + 1}{" "}
+              of {filteredPoints.length}
+            </div>
+          </section>
+        ) : null}
 
         {dataset.status === "error" ? (
           <section className={styles.errorState}>
@@ -293,7 +490,7 @@ export function GpsHistoryViewer({ dataset }: ViewerProps) {
 
               <div className={styles.mapWrap}>
                 <DynamicHistoryMap
-                  points={filteredPoints}
+                  points={visiblePoints}
                   selectedPointId={activeSelectedPointId}
                   onSelectPoint={setSelectedPointId}
                 />
@@ -330,7 +527,7 @@ export function GpsHistoryViewer({ dataset }: ViewerProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredPoints.map((point) => {
+                    {visiblePoints.map((point) => {
                       const rowClassName =
                         point.id === activeSelectedPointId
                           ? `${styles.tableRow} ${styles.selectedRow}`
