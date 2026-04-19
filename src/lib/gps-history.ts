@@ -17,6 +17,30 @@ function normalizeTimestamp(value: string) {
   return `${value}Z`;
 }
 
+function isNumberLike(value: unknown) {
+  if (typeof value === "number") {
+    return Number.isFinite(value);
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim();
+
+    if (normalized === "") {
+      return false;
+    }
+
+    return Number.isFinite(Number(normalized));
+  }
+
+  return false;
+}
+
+function toNumber(value: number | string, fallback = 0) {
+  const parsed = typeof value === "number" ? value : Number(value);
+
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function sortPoints(points: GpsHistoryPoint[]) {
   return [...points].sort((left, right) => {
     const leftTime = Date.parse(left.gpsTimestamp || left.serverReceivedAt);
@@ -39,12 +63,14 @@ function isApiPoint(value: unknown): value is GpsHistoryApiResponse["points"][nu
 
   return (
     typeof record.server_received_at === "string" &&
-    typeof record.gps_timestamp === "string" &&
-    typeof record.latitude === "number" &&
-    typeof record.longitude === "number" &&
-    typeof record.speed_kph === "number" &&
-    typeof record.course === "number" &&
-    typeof record.satellite_count === "number"
+    (record.gps_timestamp === undefined ||
+      record.gps_timestamp === null ||
+      typeof record.gps_timestamp === "string") &&
+    isNumberLike(record.latitude) &&
+    isNumberLike(record.longitude) &&
+    isNumberLike(record.speed_kph) &&
+    isNumberLike(record.course) &&
+    isNumberLike(record.satellite_count)
   );
 }
 
@@ -58,9 +84,26 @@ function isApiResponse(value: unknown): value is GpsHistoryApiResponse {
   return (
     typeof record.imei === "string" &&
     typeof record.start_at === "string" &&
+    (record.latest_server_received_at === undefined ||
+      record.latest_server_received_at === null ||
+      typeof record.latest_server_received_at === "string") &&
     Array.isArray(record.points) &&
     record.points.every(isApiPoint)
   );
+}
+
+function resolveLatestServerReceivedAt(payload: GpsHistoryApiResponse) {
+  if (payload.latest_server_received_at) {
+    return normalizeTimestamp(payload.latest_server_received_at);
+  }
+
+  const fallbackFromPoints = payload.points.at(-1)?.server_received_at;
+
+  if (fallbackFromPoints) {
+    return normalizeTimestamp(fallbackFromPoints);
+  }
+
+  return normalizeTimestamp(payload.start_at);
 }
 
 function toPoint(
@@ -68,16 +111,21 @@ function toPoint(
   point: GpsHistoryApiResponse["points"][number],
   index: number,
 ): GpsHistoryPoint {
+  const gpsTimestamp =
+    typeof point.gps_timestamp === "string" && point.gps_timestamp.trim() !== ""
+      ? point.gps_timestamp
+      : point.server_received_at;
+
   return {
     id: index + 1,
     imei,
     serverReceivedAt: normalizeTimestamp(point.server_received_at),
-    gpsTimestamp: normalizeTimestamp(point.gps_timestamp),
-    latitude: point.latitude,
-    longitude: point.longitude,
-    speedKph: point.speed_kph,
-    course: point.course,
-    satelliteCount: point.satellite_count,
+    gpsTimestamp: normalizeTimestamp(gpsTimestamp),
+    latitude: toNumber(point.latitude),
+    longitude: toNumber(point.longitude),
+    speedKph: toNumber(point.speed_kph),
+    course: toNumber(point.course),
+    satelliteCount: Math.round(toNumber(point.satellite_count)),
     packetFamily: "api_location",
     peerAddr: "",
   };
@@ -113,6 +161,7 @@ export async function fetchGpsHistory({
         points: [],
         imei: effectiveImei,
         startAt: effectiveStartAt,
+        latestServerReceivedAt: normalizeTimestamp(effectiveStartAt),
       };
     }
 
@@ -125,6 +174,7 @@ export async function fetchGpsHistory({
         points: [],
         imei: effectiveImei,
         startAt: effectiveStartAt,
+        latestServerReceivedAt: normalizeTimestamp(effectiveStartAt),
       };
     }
 
@@ -133,6 +183,7 @@ export async function fetchGpsHistory({
       points: sortPoints(payload.points.map((point, index) => toPoint(payload.imei, point, index))),
       imei: payload.imei,
       startAt: normalizeTimestamp(payload.start_at),
+      latestServerReceivedAt: resolveLatestServerReceivedAt(payload),
     };
   } catch (error) {
     return {
@@ -142,6 +193,7 @@ export async function fetchGpsHistory({
       points: [],
       imei: effectiveImei,
       startAt: effectiveStartAt,
+      latestServerReceivedAt: normalizeTimestamp(effectiveStartAt),
     };
   }
 }

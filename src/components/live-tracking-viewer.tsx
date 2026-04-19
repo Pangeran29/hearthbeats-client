@@ -118,10 +118,6 @@ function getPointKey(point: GpsHistoryPoint) {
   ].join("|");
 }
 
-function getLatestTimestamp(points: GpsHistoryPoint[], fallback: string) {
-  return points.at(-1)?.gpsTimestamp || points.at(-1)?.serverReceivedAt || fallback;
-}
-
 function normalizePointIds(points: GpsHistoryPoint[]) {
   return points.map((point, index) => ({
     ...point,
@@ -143,7 +139,7 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
   const [isSheetExpanded, setIsSheetExpanded] = useState(false);
   const [pollError, setPollError] = useState<string | null>(null);
   const [lastRefreshAt, setLastRefreshAt] = useState(
-    isReady ? getLatestTimestamp(initialPoints, dataset.startAt) : dataset.startAt,
+    isReady ? dataset.latestServerReceivedAt : dataset.startAt,
   );
 
   const nextIdRef = useRef(initialPoints.length);
@@ -200,6 +196,15 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
     let isMounted = true;
     let isRequestInFlight = false;
 
+    const applyLatestCursor = (cursor: string) => {
+      latestTimestampRef.current = cursor;
+      setLastRefreshAt(cursor);
+
+      if (followEndRef.current) {
+        setEndDateTime(toInputDateTime(cursor));
+      }
+    };
+
     const appendFreshPoints = (incomingPoints: GpsHistoryPoint[]) => {
       setPoints((currentPoints) => {
         const currentKeys = new Set(currentPoints.map(getPointKey));
@@ -229,16 +234,6 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
         if (appendedCount > 0) {
           const latestPoint = mergedPoints.at(-1);
           if (latestPoint) {
-            latestTimestampRef.current = getLatestTimestamp(
-              mergedPoints,
-              dataset.startAt,
-            );
-            setLastRefreshAt(latestTimestampRef.current);
-
-            if (followEndRef.current) {
-              setEndDateTime(toInputDateTime(latestTimestampRef.current));
-            }
-
             if (
               selectedPointIdRef.current === null ||
               selectedPointIdRef.current === currentLastPointId
@@ -283,10 +278,9 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
         }
 
         setPollError(null);
+        applyLatestCursor(payload.latestServerReceivedAt || latestTimestampRef.current);
 
         if (payload.points.length === 0) {
-          latestTimestampRef.current = payload.startAt || latestTimestampRef.current;
-          setLastRefreshAt(latestTimestampRef.current);
           return;
         }
 
