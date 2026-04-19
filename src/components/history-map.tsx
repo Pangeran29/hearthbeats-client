@@ -9,6 +9,7 @@ import {
   Polyline,
   Popup,
   TileLayer,
+  ZoomControl,
   useMap,
 } from "react-leaflet";
 import type { LatLngBoundsExpression, LatLngExpression } from "leaflet";
@@ -34,6 +35,7 @@ type HistoryMapProps = {
   points: GpsHistoryPoint[];
   selectedPointId: number | null;
   onSelectPoint: (pointId: number) => void;
+  isSheetExpanded: boolean;
 };
 
 function haversineMeters(
@@ -210,10 +212,46 @@ function FitBounds({
   return null;
 }
 
+function SyncControlOffsets({ isSheetExpanded }: { isSheetExpanded: boolean }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const container = map.getContainer();
+    const bottomControls = container.querySelectorAll<HTMLElement>(".leaflet-bottom");
+
+    let bottomOffset = "250px";
+
+    if (isSheetExpanded) {
+      bottomOffset = "78dvh";
+
+      if (window.innerWidth >= 1120) {
+        bottomOffset = "64dvh";
+      } else if (window.innerWidth >= 760) {
+        bottomOffset = "70dvh";
+      }
+    } else if (window.innerWidth >= 760) {
+      bottomOffset = "270px";
+    }
+
+    bottomControls.forEach((element) => {
+      element.style.bottom = `calc(${bottomOffset} + env(safe-area-inset-bottom) + 12px)`;
+    });
+
+    return () => {
+      bottomControls.forEach((element) => {
+        element.style.bottom = "";
+      });
+    };
+  }, [isSheetExpanded, map]);
+
+  return null;
+}
+
 export function HistoryMap({
   points,
   selectedPointId,
   onSelectPoint,
+  isSheetExpanded,
 }: HistoryMapProps) {
   const cleanedPoints = useMemo(() => filterOutliers(points), [points]);
   const segments = useMemo(() => buildSegments(cleanedPoints), [cleanedPoints]);
@@ -226,12 +264,20 @@ export function HistoryMap({
   const endPoint = points.at(-1) ?? null;
 
   return (
-    <MapContainer center={center} zoom={15} className={styles.map} scrollWheelZoom>
+    <MapContainer
+      center={center}
+      zoom={15}
+      className={styles.map}
+      scrollWheelZoom
+      zoomControl={false}
+    >
       <TileLayer
         attribution="&copy; Google Maps"
         url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
       />
+      <ZoomControl position="bottomright" />
       <FitBounds points={points} selectedPointId={selectedPointId} />
+      <SyncControlOffsets isSheetExpanded={isSheetExpanded} />
 
       {segments.map((segment, idx) =>
         segment.length > 1 ? (

@@ -26,7 +26,12 @@ export function SpeedHistoryChart({ data }: SpeedHistoryChartProps) {
     <ResponsiveContainer width="100%" height="100%">
       <LineChart data={data}>
         <CartesianGrid stroke="rgba(148, 163, 184, 0.25)" vertical={false} />
-        <XAxis dataKey="fullTime" tickFormatter={(val) => new Date(val).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} tickLine={false} axisLine={false} minTickGap={30} />
+        <XAxis
+          dataKey="time"
+          tickLine={false}
+          axisLine={false}
+          minTickGap={30}
+        />
         <YAxis tickLine={false} axisLine={false} unit=" km/h" width={56} />
         <Tooltip
           formatter={(value) => [`${value ?? 0} km/h`, "Speed"]}
