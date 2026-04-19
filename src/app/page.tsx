@@ -1,13 +1,6 @@
-import Link from "next/link";
-
-import { getDefaultGpsHistoryParams } from "@/lib/gps-history";
-
 import styles from "./page.module.css";
 
 export default function Home() {
-  const defaults = getDefaultGpsHistoryParams();
-  const monitorHref = `/${defaults.imei}?start_at=${encodeURIComponent(defaults.startAt)}`;
-
   return (
     <main className={styles.page}>
       <video

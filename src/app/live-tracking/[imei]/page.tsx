@@ -1,15 +1,15 @@
-import { GpsHistoryViewer } from "@/components/gps-history-viewer";
+import { LiveTrackingViewer } from "@/components/live-tracking-viewer";
 import { fetchGpsHistory, getDefaultGpsHistoryParams } from "@/lib/gps-history";
 
-type DeviceHistoryPageProps = {
+type LiveTrackingPageProps = {
   params: Promise<{ imei: string }>;
   searchParams: Promise<{ start_at?: string }>;
 };
 
-export default async function DeviceHistoryPage({
+export default async function LiveTrackingPage({
   params,
   searchParams,
-}: DeviceHistoryPageProps) {
+}: LiveTrackingPageProps) {
   const { imei } = await params;
   const { start_at: startAt } = await searchParams;
   const defaults = getDefaultGpsHistoryParams();
@@ -18,5 +18,5 @@ export default async function DeviceHistoryPage({
     startAt: startAt ?? defaults.startAt,
   });
 
-  return <GpsHistoryViewer dataset={dataset} />;
+  return <LiveTrackingViewer dataset={dataset} />;
 }

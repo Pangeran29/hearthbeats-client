@@ -262,6 +262,7 @@ export function HistoryMap({
       : [-6.2038, 106.7854];
   const startPoint = points[0] ?? null;
   const endPoint = points.at(-1) ?? null;
+  const latestPointId = endPoint?.id ?? null;
 
   return (
     <MapContainer
@@ -326,17 +327,26 @@ export function HistoryMap({
 
       {cleanedPoints.map((point) => {
         const isSelected = point.id === selectedPointId;
+        const isLatest = point.id === latestPointId;
 
         return (
           <CircleMarker
             key={point.id}
             center={[point.latitude, point.longitude]}
-            radius={isSelected ? 8 : 5}
+            radius={isSelected ? 8 : isLatest ? 7 : 5}
             pathOptions={{
-              color: isSelected ? "#0f172a" : "#fff7ed",
-              fillColor: isSelected ? "#fb7185" : "#f97316",
+              color: isSelected
+                ? "#0f172a"
+                : isLatest
+                  ? "#1d4ed8"
+                  : "#fff7ed",
+              fillColor: isSelected
+                ? "#fb7185"
+                : isLatest
+                  ? "#3b82f6"
+                  : "#f97316",
               fillOpacity: 0.95,
-              weight: isSelected ? 3 : 1,
+              weight: isSelected ? 3 : isLatest ? 2 : 1,
             }}
             eventHandlers={{ click: () => onSelectPoint(point.id) }}
           >

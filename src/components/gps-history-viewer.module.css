@@ -13,6 +13,27 @@
   overflow: hidden;
 }
 
+.liveBadge {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: 12px;
+  z-index: 540;
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #fff7ed;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.24);
+}
+
 .overlayCard,
 .bottomSheet,
 .errorState,
@@ -252,6 +273,10 @@
 }
 
 @media (min-width: 760px) {
+  .liveBadge {
+    left: 20px;
+  }
+
   .overlayCard {
     left: 20px;
     right: auto;
