@@ -107,6 +107,10 @@ function buildRange(points: GpsHistoryPoint[], fallbackStartAt: string) {
 }
 
 function getPointKey(point: GpsHistoryPoint) {
+  if (point.sourceId !== undefined && point.sourceId !== null) {
+    return `source:${String(point.sourceId)}`;
+  }
+
   return [
     point.gpsTimestamp,
     point.serverReceivedAt,

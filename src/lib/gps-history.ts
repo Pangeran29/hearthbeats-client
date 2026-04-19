@@ -118,6 +118,7 @@ function toPoint(
 
   return {
     id: index + 1,
+    sourceId: point.id,
     imei,
     serverReceivedAt: normalizeTimestamp(point.server_received_at),
     gpsTimestamp: normalizeTimestamp(gpsTimestamp),

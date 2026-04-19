@@ -1,5 +1,6 @@
 export type GpsHistoryPoint = {
   id: number;
+  sourceId?: number | string;
   imei: string;
   serverReceivedAt: string;
   gpsTimestamp: string;
@@ -30,6 +31,7 @@ export type GpsHistoryDataset =
     };
 
 export type GpsHistoryApiPoint = {
+  id?: number | string;
   server_received_at: string;
   gps_timestamp?: string | null;
   latitude: number | string;
