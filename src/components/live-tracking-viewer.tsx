@@ -92,6 +92,21 @@ function toRadians(value: number) {
   return (value * Math.PI) / 180;
 }
 
+function parseRangeStart(value: string) {
+  return Date.parse(value);
+}
+
+function parseRangeEndInclusive(value: string) {
+  const parsed = Date.parse(value);
+
+  if (Number.isNaN(parsed)) {
+    return parsed;
+  }
+
+  // datetime-local is minute precision here, so include the whole minute.
+  return parsed + 59_999;
+}
+
 function buildRange(points: GpsHistoryPoint[], fallbackStartAt: string) {
   if (points.length === 0) {
     const normalizedFallback = toInputDateTime(fallbackStartAt);
@@ -162,7 +177,7 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
   const isInvalidRange =
     startDateTime !== "" &&
     endDateTime !== "" &&
-    Date.parse(startDateTime) > Date.parse(endDateTime);
+    parseRangeStart(startDateTime) > parseRangeEndInclusive(endDateTime);
 
   const filteredPoints = useMemo(() => {
     if (isInvalidRange) {
@@ -171,9 +186,11 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
 
     return points.filter((point) => {
       const timestamp = Date.parse(point.gpsTimestamp || point.serverReceivedAt);
+      const parsedStart = startDateTime === "" ? null : parseRangeStart(startDateTime);
+      const parsedEnd = endDateTime === "" ? null : parseRangeEndInclusive(endDateTime);
       const startsAfter =
-        startDateTime === "" || timestamp >= Date.parse(startDateTime);
-      const endsBefore = endDateTime === "" || timestamp <= Date.parse(endDateTime);
+        parsedStart === null || timestamp >= parsedStart;
+      const endsBefore = parsedEnd === null || timestamp <= parsedEnd;
 
       return startsAfter && endsBefore;
     });
