@@ -17,6 +17,14 @@ function normalizeTimestamp(value: string) {
   return `${value}Z`;
 }
 
+function normalizeOptionalTimestamp(value?: string) {
+  if (!value) {
+    return undefined;
+  }
+
+  return normalizeTimestamp(value);
+}
+
 function isNumberLike(value: unknown) {
   if (typeof value === "number") {
     return Number.isFinite(value);
@@ -84,6 +92,9 @@ function isApiResponse(value: unknown): value is GpsHistoryApiResponse {
   return (
     typeof record.imei === "string" &&
     typeof record.start_at === "string" &&
+    (record.end_at === undefined ||
+      record.end_at === null ||
+      typeof record.end_at === "string") &&
     (record.latest_server_received_at === undefined ||
       record.latest_server_received_at === null ||
       typeof record.latest_server_received_at === "string") &&
@@ -142,16 +153,27 @@ export function getDefaultGpsHistoryParams() {
 export async function fetchGpsHistory({
   imei,
   startAt,
+  endAt,
 }: {
   imei?: string;
   startAt?: string;
+  endAt?: string;
 }): Promise<GpsHistoryDataset> {
   const effectiveImei = imei?.trim() || DEFAULT_IMEI;
   const effectiveStartAt = startAt?.trim() || DEFAULT_START_AT;
+  const effectiveEndAt = endAt?.trim() || undefined;
+
+  const queryParams = new URLSearchParams({
+    start_at: effectiveStartAt,
+  });
+
+  if (effectiveEndAt) {
+    queryParams.set("end_at", effectiveEndAt);
+  }
 
   try {
     const response = await fetch(
-      `${GPS_HISTORY_API_BASE_URL}/devices/${encodeURIComponent(effectiveImei)}/locations?start_at=${encodeURIComponent(effectiveStartAt)}`,
+      `${GPS_HISTORY_API_BASE_URL}/devices/${encodeURIComponent(effectiveImei)}/locations?${queryParams.toString()}`,
       { cache: "no-store" },
     );
 
@@ -162,6 +184,7 @@ export async function fetchGpsHistory({
         points: [],
         imei: effectiveImei,
         startAt: effectiveStartAt,
+        endAt: normalizeOptionalTimestamp(effectiveEndAt),
         latestServerReceivedAt: normalizeTimestamp(effectiveStartAt),
       };
     }
@@ -175,6 +198,7 @@ export async function fetchGpsHistory({
         points: [],
         imei: effectiveImei,
         startAt: effectiveStartAt,
+        endAt: normalizeOptionalTimestamp(effectiveEndAt),
         latestServerReceivedAt: normalizeTimestamp(effectiveStartAt),
       };
     }
@@ -184,6 +208,7 @@ export async function fetchGpsHistory({
       points: sortPoints(payload.points.map((point, index) => toPoint(payload.imei, point, index))),
       imei: payload.imei,
       startAt: normalizeTimestamp(payload.start_at),
+      endAt: normalizeOptionalTimestamp(payload.end_at ?? effectiveEndAt),
       latestServerReceivedAt: resolveLatestServerReceivedAt(payload),
     };
   } catch (error) {
@@ -194,6 +219,7 @@ export async function fetchGpsHistory({
       points: [],
       imei: effectiveImei,
       startAt: effectiveStartAt,
+      endAt: normalizeOptionalTimestamp(effectiveEndAt),
       latestServerReceivedAt: normalizeTimestamp(effectiveStartAt),
     };
   }

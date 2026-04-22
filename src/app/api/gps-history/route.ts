@@ -8,7 +8,8 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const imei = url.searchParams.get("imei") ?? undefined;
   const startAt = url.searchParams.get("start_at") ?? undefined;
-  const dataset = await fetchGpsHistory({ imei, startAt });
+  const endAt = url.searchParams.get("end_at") ?? undefined;
+  const dataset = await fetchGpsHistory({ imei, startAt, endAt });
 
   return NextResponse.json(dataset, {
     headers: {

@@ -146,6 +146,7 @@ function normalizePointIds(points: GpsHistoryPoint[]) {
 
 export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
   const isReady = dataset.status === "ready";
+  const hasFixedEndAt = Boolean(dataset.endAt);
   const initialPoints = isReady ? normalizePointIds(dataset.points) : [];
   const initialRange = buildRange(initialPoints, dataset.startAt);
 
@@ -210,7 +211,7 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
   const liveStatus = `${points.length} points live`;
 
   useEffect(() => {
-    if (!isReady) {
+    if (!isReady || hasFixedEndAt) {
       return;
     }
 
@@ -326,7 +327,7 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
       isMounted = false;
       window.clearInterval(intervalId);
     };
-  }, [dataset.imei, dataset.startAt, isReady]);
+  }, [dataset.imei, dataset.startAt, hasFixedEndAt, isReady]);
 
   if (!isReady && dataset.points.length === 0) {
     return (
@@ -431,6 +432,7 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
                 <span className={styles.infoLabel}>Live page</span>
                 <strong className={styles.infoValue}>
                   /live-tracking/{dataset.imei}?start_at={dataset.startAt}
+                  {dataset.endAt ? `&end_at=${dataset.endAt}` : ""}
                 </strong>
               </article>
 

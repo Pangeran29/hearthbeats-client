@@ -3,7 +3,7 @@ import { fetchGpsHistory, getDefaultGpsHistoryParams } from "@/lib/gps-history";
 
 type LiveTrackingPageProps = {
   params: Promise<{ imei: string }>;
-  searchParams: Promise<{ start_at?: string }>;
+  searchParams: Promise<{ start_at?: string; end_at?: string }>;
 };
 
 export default async function LiveTrackingPage({
@@ -11,11 +11,12 @@ export default async function LiveTrackingPage({
   searchParams,
 }: LiveTrackingPageProps) {
   const { imei } = await params;
-  const { start_at: startAt } = await searchParams;
+  const { start_at: startAt, end_at: endAt } = await searchParams;
   const defaults = getDefaultGpsHistoryParams();
   const dataset = await fetchGpsHistory({
     imei,
     startAt: startAt ?? defaults.startAt,
+    endAt,
   });
 
   return <LiveTrackingViewer dataset={dataset} />;

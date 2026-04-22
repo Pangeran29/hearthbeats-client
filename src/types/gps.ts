@@ -19,6 +19,7 @@ export type GpsHistoryDataset =
       points: GpsHistoryPoint[];
       imei: string;
       startAt: string;
+      endAt?: string;
       latestServerReceivedAt: string;
     }
   | {
@@ -27,6 +28,7 @@ export type GpsHistoryDataset =
       points: GpsHistoryPoint[];
       imei: string;
       startAt: string;
+      endAt?: string;
       latestServerReceivedAt: string;
     };
 
@@ -44,6 +46,7 @@ export type GpsHistoryApiPoint = {
 export type GpsHistoryApiResponse = {
   imei: string;
   start_at: string;
+  end_at?: string | null;
   latest_server_received_at?: string | null;
   points: GpsHistoryApiPoint[];
 };
