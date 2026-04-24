@@ -1,13 +1,16 @@
 .page {
   position: relative;
-  min-height: 100dvh;
-  overflow: hidden;
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
   color: #fffaf3;
   background: #09090b;
 }
 
 .backgroundVideo {
-  position: absolute;
+  position: fixed;
   inset: 0;
   width: 100%;
   height: 100%;
@@ -17,12 +20,18 @@
 }
 
 .overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background:
     radial-gradient(circle at top left, rgba(255, 183, 77, 0.22), transparent 36%),
     radial-gradient(circle at 80% 20%, rgba(248, 113, 113, 0.18), transparent 30%),
     linear-gradient(180deg, rgba(2, 6, 23, 0.48), rgba(2, 6, 23, 0.78));
+}
+
+.slide {
+  min-height: 100dvh;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
 }
 
 .hero,
@@ -34,7 +43,6 @@
 }
 
 .hero {
-  min-height: 100dvh;
   display: flex;
   align-items: center;
   padding: clamp(1.5rem, 4vw, 4rem);
@@ -110,6 +118,16 @@
   margin-top: 0.4rem;
 }
 
+.scrollHint {
+  margin-top: 0.2rem;
+  width: fit-content;
+  font-size: 0.9rem;
+  color: rgba(255, 250, 243, 0.82);
+  letter-spacing: 0.02em;
+  border-bottom: 1px dashed rgba(255, 250, 243, 0.5);
+  animation: hintPulse 1.7s ease-in-out infinite;
+}
+
 .primaryAction,
 .secondaryAction,
 .subscribeAction {
@@ -179,6 +197,83 @@
   text-shadow: 0 2px 10px rgba(2, 6, 23, 0.24);
 }
 
+.featuresSection {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  padding: clamp(1.2rem, 4vw, 4rem);
+}
+
+.featuresSection::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(2, 6, 23, 0.86), rgba(2, 6, 23, 0.95)),
+    radial-gradient(circle at 85% 15%, rgba(251, 146, 60, 0.2), transparent 35%);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.featuresContent {
+  position: relative;
+  z-index: 1;
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 1.1rem;
+}
+
+.featuresHeading {
+  max-width: 16ch;
+  font-size: clamp(2rem, 5.2vw, 4rem);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+}
+
+.featuresLead {
+  max-width: 64ch;
+  color: rgba(255, 250, 243, 0.9);
+  line-height: 1.65;
+}
+
+.featuresGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.featureCard {
+  padding: 1rem 1.05rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(15, 23, 42, 0.44);
+  backdrop-filter: blur(6px);
+}
+
+.featureCard h3 {
+  font-size: 1.02rem;
+  margin-bottom: 0.38rem;
+  color: #fffaf3;
+}
+
+.featureCard p {
+  color: rgba(255, 250, 243, 0.84);
+  line-height: 1.55;
+}
+
+@keyframes hintPulse {
+  0%,
+  100% {
+    opacity: 0.65;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(2px);
+  }
+}
+
 @media (min-width: 760px) {
   .hero {
     padding: clamp(2rem, 5vw, 4.5rem);
@@ -198,12 +293,25 @@
   .pointsList {
     max-width: 42rem;
   }
+
+  .featuresGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .scrollHint,
   .primaryAction,
   .secondaryAction,
   .subscribeAction {
     transition: none;
+  }
+
+  .scrollHint {
+    animation: none;
+  }
+
+  .page {
+    scroll-behavior: auto;
   }
 }
