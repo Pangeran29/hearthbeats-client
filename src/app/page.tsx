@@ -23,7 +23,8 @@ export default function Home() {
             <p className={styles.kicker}>Heartbeats GPS Tracker</p>
             <h1>Motor Aman, Kamu Tenang.</h1>
             <p className={styles.lead}>
-              Cuma Rp 75.000/bulan untuk keamanan dan ketenangan meninggalkan motor di mana saja.
+              Harga normal <span className={styles.normalPrice}>Rp 75.000/bulan</span>,
+              sekarang <span className={styles.discountPrice}>promo Rp 50.000/bulan</span>.
               Pantau motor real-time, lihat riwayat perjalanan, dan dapat notifikasi otomatis kapan saja.
             </p>
 

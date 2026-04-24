@@ -89,6 +89,20 @@
   text-shadow: 0 2px 12px rgba(2, 6, 23, 0.28);
 }
 
+.normalPrice {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  color: rgba(255, 233, 209, 0.88);
+}
+
+.discountPrice {
+  color: #fed7aa;
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.18em;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
