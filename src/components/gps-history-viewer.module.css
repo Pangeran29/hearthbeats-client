@@ -13,6 +13,12 @@
   overflow: hidden;
 }
 
+.mapPane {
+  position: relative;
+  height: 100%;
+  min-height: 100dvh;
+}
+
 .liveBadge {
   position: absolute;
   top: max(12px, env(safe-area-inset-top));
@@ -74,7 +80,7 @@
   background: #ffffff;
   border-radius: 28px 28px 0 0;
   padding: 0.5rem 0.85rem calc(16px + env(safe-area-inset-bottom));
-  transition: max-height 220ms ease;
+  transition: max-height 90ms linear, transform 90ms linear;
 }
 
 .sheetCollapsed {
@@ -82,7 +88,11 @@
 }
 
 .sheetExpanded {
-  max-height: min(78dvh, 860px);
+  max-height: min(50dvh, 860px);
+}
+
+.sheetDragging {
+  transition: none;
 }
 
 .sheetHandle {
@@ -96,6 +106,8 @@
   border: 0;
   color: inherit;
   cursor: pointer;
+  touch-action: none;
+  user-select: none;
 }
 
 .sheetGrip {
@@ -118,7 +130,7 @@
 .sheetContent {
   display: grid;
   gap: 0.85rem;
-  max-height: calc(min(78dvh, 860px) - 64px - env(safe-area-inset-bottom));
+  max-height: calc(min(50dvh, 860px) - 64px - env(safe-area-inset-bottom));
   overflow: auto;
   padding-bottom: 0.25rem;
 }
@@ -299,11 +311,11 @@
   }
 
   .sheetExpanded {
-    max-height: min(70dvh, 860px);
+    max-height: min(40dvh, 860px);
   }
 
   .sheetContent {
-    max-height: calc(min(70dvh, 860px) - 68px);
+    max-height: calc(min(40dvh, 860px) - 68px);
   }
 
   .statsRow,
@@ -322,15 +334,56 @@
 }
 
 @media (min-width: 1120px) {
-  .bottomSheet {
-    max-width: 880px;
+  .mapShell {
+    display: grid;
+    grid-template-columns: minmax(280px, 20%) minmax(0, 75%);
+    justify-content: space-between;
+    gap: 0;
+    padding: 16px;
+    align-items: stretch;
   }
 
+  .mapPane {
+    grid-column: 2;
+    min-height: calc(100dvh - 32px);
+    border-radius: 26px;
+    overflow: hidden;
+  }
+
+  .liveBadge {
+    left: 16px;
+  }
+
+  .overlayCard {
+    left: 16px;
+  }
+
+  .bottomSheet {
+    position: relative;
+    grid-column: 1;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    max-width: none;
+    height: calc(100dvh - 32px);
+    min-height: calc(100dvh - 32px);
+    border-radius: 26px;
+    padding: 0.65rem 0.9rem 0.9rem;
+    transform: none !important;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sheetCollapsed,
   .sheetExpanded {
-    max-height: min(64dvh, 860px);
+    max-height: none;
   }
 
   .sheetContent {
-    max-height: calc(min(64dvh, 860px) - 68px);
+    max-height: none;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
   }
 }

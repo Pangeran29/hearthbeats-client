@@ -100,71 +100,34 @@ function filterOutliers(points: GpsHistoryPoint[]): GpsHistoryPoint[] {
 }
 
 /**
- * Split points into continuous route segments.
- * A new segment starts when two consecutive points imply an
- * unrealistically high speed or have a very large absolute gap,
- * which indicates a GPS jump or data from a separate trip.
+ * Build one continuous route segment from the cleaned points.
+ * We intentionally avoid speed/time-based splitting because
+ * tracker packet timing can be bursty and create false breaks.
  */
 function buildSegments(points: GpsHistoryPoint[]): LatLngExpression[][] {
-  if (points.length === 0) return [];
+  if (points.length < 2) return [];
 
-  const MAX_REALISTIC_SPEED_KMH = 150;
-  const MAX_ABSOLUTE_GAP_METERS = 500;
-
-  const segments: LatLngExpression[][] = [];
-  let current: LatLngExpression[] = [
-    [points[0].latitude, points[0].longitude],
+  return [
+    points.map((point) => [point.latitude, point.longitude] as LatLngExpression),
   ];
-
-  for (let i = 1; i < points.length; i++) {
-    const prev = points[i - 1];
-    const curr = points[i];
-    const dist = haversineMeters(
-      prev.latitude,
-      prev.longitude,
-      curr.latitude,
-      curr.longitude,
-    );
-    const timeDiffSec =
-      Math.abs(
-        Date.parse(curr.gpsTimestamp) - Date.parse(prev.gpsTimestamp),
-      ) / 1000;
-
-    const impliedSpeedKmh =
-      timeDiffSec > 0 ? (dist / timeDiffSec) * 3.6 : Infinity;
-
-    // Break the segment when the jump is unrealistic
-    const shouldBreak =
-      impliedSpeedKmh > MAX_REALISTIC_SPEED_KMH ||
-      dist > MAX_ABSOLUTE_GAP_METERS;
-
-    if (shouldBreak) {
-      if (current.length > 0) {
-        segments.push(current);
-      }
-      current = [];
-    }
-
-    current.push([curr.latitude, curr.longitude]);
-  }
-
-  if (current.length > 0) {
-    segments.push(current);
-  }
-
-  return segments;
 }
 
 function formatTimestamp(value: string) {
   return new Date(value).toLocaleString();
 }
 
+function formatCoordinate(value: number) {
+  return value.toFixed(6);
+}
+
 function FitBounds({
   points,
   selectedPointId,
+  isSheetExpanded,
 }: {
   points: GpsHistoryPoint[];
   selectedPointId: number | null;
+  isSheetExpanded: boolean;
 }) {
   const map = useMap();
 
@@ -177,12 +140,27 @@ function FitBounds({
       points.find((point) => point.id === selectedPointId) ?? null;
 
     if (selectedPoint) {
+      const isWideDesktop = window.innerWidth >= 1120;
+      const sheetHeightRatio = window.innerWidth >= 760 ? 0.4 : 0.5;
+      const sheetHeightPx = isSheetExpanded
+        ? isWideDesktop
+          ? 0
+          : window.innerHeight * sheetHeightRatio
+        : window.innerWidth >= 760
+          ? isWideDesktop
+            ? 0
+            : 250
+          : 220;
+      const projected = map.project([selectedPoint.latitude, selectedPoint.longitude]);
+      const shifted = projected.subtract([0, sheetHeightPx * 0.18]);
+      const shiftedLatLng = map.unproject(shifted);
+
       if (map.getZoom() < 16) {
-        map.flyTo([selectedPoint.latitude, selectedPoint.longitude], 17, {
+        map.flyTo(shiftedLatLng, 17, {
           duration: 0.7,
         });
       } else {
-        map.panTo([selectedPoint.latitude, selectedPoint.longitude], {
+        map.panTo(shiftedLatLng, {
           animate: true,
           duration: 0.3,
         });
@@ -204,10 +182,21 @@ function FitBounds({
       return;
     }
 
+    const bottomPadding = window.innerWidth >= 1120
+      ? 64
+      : isSheetExpanded
+        ? window.innerWidth >= 760
+          ? Math.round(window.innerHeight * 0.42)
+          : Math.round(window.innerHeight * 0.52)
+        : window.innerWidth >= 760
+          ? 300
+          : 260;
+
     map.fitBounds(coordinates as LatLngBoundsExpression, {
-      padding: [32, 32],
+      paddingTopLeft: [32, 32],
+      paddingBottomRight: [32, bottomPadding],
     });
-  }, [map, points, selectedPointId]);
+  }, [isSheetExpanded, map, points, selectedPointId]);
 
   return null;
 }
@@ -221,14 +210,10 @@ function SyncControlOffsets({ isSheetExpanded }: { isSheetExpanded: boolean }) {
 
     let bottomOffset = "250px";
 
-    if (isSheetExpanded) {
-      bottomOffset = "78dvh";
-
-      if (window.innerWidth >= 1120) {
-        bottomOffset = "64dvh";
-      } else if (window.innerWidth >= 760) {
-        bottomOffset = "70dvh";
-      }
+    if (window.innerWidth >= 1120) {
+      bottomOffset = "20px";
+    } else if (isSheetExpanded) {
+      bottomOffset = window.innerWidth >= 760 ? "40dvh" : "50dvh";
     } else if (window.innerWidth >= 760) {
       bottomOffset = "270px";
     }
@@ -277,7 +262,11 @@ export function HistoryMap({
         url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
       />
       <ZoomControl position="bottomright" />
-      <FitBounds points={points} selectedPointId={selectedPointId} />
+      <FitBounds
+        points={points}
+        selectedPointId={selectedPointId}
+        isSheetExpanded={isSheetExpanded}
+      />
       <SyncControlOffsets isSheetExpanded={isSheetExpanded} />
 
       {segments.map((segment, idx) =>
@@ -306,7 +295,14 @@ export function HistoryMap({
           <Popup>
             <strong>Start point</strong>
             <br />
-            {formatTimestamp(startPoint.gpsTimestamp)}
+            {formatTimestamp(startPoint.serverReceivedAt)}
+            <br />
+            <span>Speed: {startPoint.speedKph} km/h</span>
+            <br />
+            <span>
+              Coord: {formatCoordinate(startPoint.latitude)},{" "}
+              {formatCoordinate(startPoint.longitude)}
+            </span>
           </Popup>
         </Marker>
       ) : null}
@@ -320,7 +316,14 @@ export function HistoryMap({
           <Popup>
             <strong>End point</strong>
             <br />
-            {formatTimestamp(endPoint.gpsTimestamp)}
+            {formatTimestamp(endPoint.serverReceivedAt)}
+            <br />
+            <span>Speed: {endPoint.speedKph} km/h</span>
+            <br />
+            <span>
+              Coord: {formatCoordinate(endPoint.latitude)},{" "}
+              {formatCoordinate(endPoint.longitude)}
+            </span>
           </Popup>
         </Marker>
       ) : null}
@@ -352,10 +355,10 @@ export function HistoryMap({
           >
             <Popup>
               <div className={styles.popup}>
-                <strong>{formatTimestamp(point.gpsTimestamp)}</strong>
+                <strong>{formatTimestamp(point.serverReceivedAt)}</strong>
                 <span>Speed: {point.speedKph} km/h</span>
                 <span>
-                  Coord: {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
+                  Coord: {formatCoordinate(point.latitude)}, {formatCoordinate(point.longitude)}
                 </span>
                 <span>Course: {point.course}&deg;</span>
               </div>

@@ -26,6 +26,9 @@ type LiveTrackingViewerProps = {
 };
 
 const LIVE_POLL_INTERVAL_MS = 10_000;
+const SHEET_DRAG_THRESHOLD_PX = 24;
+
+type GpsGuardStatus = "in_range" | "out_of_range" | "invalid_gps_time";
 
 function toInputDateTime(value: string) {
   const date = new Date(value);
@@ -49,6 +52,22 @@ function formatShortDateTime(value: string) {
         month: "short",
         hour: "2-digit",
         minute: "2-digit",
+        hour12: false,
+        timeZone: "Asia/Jakarta",
+      }).format(date);
+}
+
+function formatShortDateTimeWithSeconds(value: string) {
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat("en-GB", {
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
         hour12: false,
         timeZone: "Asia/Jakarta",
       }).format(date);
@@ -107,6 +126,23 @@ function parseRangeEndInclusive(value: string) {
   return parsed + 59_999;
 }
 
+function classifyGpsGuardStatus(
+  point: GpsHistoryPoint,
+  parsedStart: number | null,
+  parsedEnd: number | null,
+): GpsGuardStatus {
+  const gpsTime = Date.parse(point.gpsTimestamp);
+
+  if (Number.isNaN(gpsTime)) {
+    return "invalid_gps_time";
+  }
+
+  const startsAfter = parsedStart === null || gpsTime >= parsedStart;
+  const endsBefore = parsedEnd === null || gpsTime <= parsedEnd;
+
+  return startsAfter && endsBefore ? "in_range" : "out_of_range";
+}
+
 function buildRange(points: GpsHistoryPoint[], fallbackStartAt: string) {
   if (points.length === 0) {
     const normalizedFallback = toInputDateTime(fallbackStartAt);
@@ -114,9 +150,9 @@ function buildRange(points: GpsHistoryPoint[], fallbackStartAt: string) {
   }
 
   return {
-    start: toInputDateTime(points[0].gpsTimestamp || fallbackStartAt),
+    start: toInputDateTime(points[0].serverReceivedAt || fallbackStartAt),
     end: toInputDateTime(
-      points.at(-1)?.gpsTimestamp ?? points[0].gpsTimestamp ?? fallbackStartAt,
+      points.at(-1)?.serverReceivedAt ?? points[0].serverReceivedAt ?? fallbackStartAt,
     ),
   };
 }
@@ -151,12 +187,14 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
   const initialRange = buildRange(initialPoints, dataset.startAt);
 
   const [points, setPoints] = useState<GpsHistoryPoint[]>(initialPoints);
-  const [startDateTime, setStartDateTime] = useState(initialRange.start);
+  const [startDateTime] = useState(initialRange.start);
   const [endDateTime, setEndDateTime] = useState(initialRange.end);
   const [selectedPointId, setSelectedPointId] = useState<number | null>(
     initialPoints.at(-1)?.id ?? null,
   );
   const [isSheetExpanded, setIsSheetExpanded] = useState(false);
+  const [isDraggingSheet, setIsDraggingSheet] = useState(false);
+  const [sheetDragOffset, setSheetDragOffset] = useState(0);
   const [pollError, setPollError] = useState<string | null>(null);
   const [lastRefreshAt, setLastRefreshAt] = useState(
     isReady ? dataset.latestServerReceivedAt : dataset.startAt,
@@ -166,6 +204,8 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
   const latestTimestampRef = useRef(lastRefreshAt);
   const selectedPointIdRef = useRef<number | null>(selectedPointId);
   const followEndRef = useRef(true);
+  const dragStartYRef = useRef<number | null>(null);
+  const suppressNextClickRef = useRef(false);
 
   useEffect(() => {
     latestTimestampRef.current = lastRefreshAt;
@@ -185,10 +225,11 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
       return [];
     }
 
+    const parsedStart = startDateTime === "" ? null : parseRangeStart(startDateTime);
+    const parsedEnd = endDateTime === "" ? null : parseRangeEndInclusive(endDateTime);
+
     return points.filter((point) => {
-      const timestamp = Date.parse(point.gpsTimestamp || point.serverReceivedAt);
-      const parsedStart = startDateTime === "" ? null : parseRangeStart(startDateTime);
-      const parsedEnd = endDateTime === "" ? null : parseRangeEndInclusive(endDateTime);
+      const timestamp = Date.parse(point.serverReceivedAt);
       const startsAfter =
         parsedStart === null || timestamp >= parsedStart;
       const endsBefore = parsedEnd === null || timestamp <= parsedEnd;
@@ -197,17 +238,35 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
     });
   }, [endDateTime, isInvalidRange, points, startDateTime]);
 
-  const activeSelectedPointId = filteredPoints.some(
+  const gpsGuardByPointId = useMemo(() => {
+    const parsedStart = startDateTime === "" ? null : parseRangeStart(startDateTime);
+    const parsedEnd = endDateTime === "" ? null : parseRangeEndInclusive(endDateTime);
+    const statusById = new Map<number, GpsGuardStatus>();
+
+    for (const point of filteredPoints) {
+      statusById.set(point.id, classifyGpsGuardStatus(point, parsedStart, parsedEnd));
+    }
+
+    return statusById;
+  }, [endDateTime, filteredPoints, startDateTime]);
+
+  const mapPoints = useMemo(() => {
+    return filteredPoints.filter(
+      (point) => gpsGuardByPointId.get(point.id) === "in_range",
+    );
+  }, [filteredPoints, gpsGuardByPointId]);
+
+  const activeSelectedPointId = mapPoints.some(
     (point) => point.id === selectedPointId,
   )
     ? selectedPointId
-    : filteredPoints.at(-1)?.id ?? null;
+    : mapPoints.at(-1)?.id ?? null;
   const peakSpeed =
-    filteredPoints.length === 0
+    mapPoints.length === 0
       ? "0 km/h"
-      : `${Math.max(...filteredPoints.map((point) => point.speedKph))} km/h`;
-  const startPoint = filteredPoints[0] ?? null;
-  const endPoint = filteredPoints.at(-1) ?? null;
+      : `${Math.max(...mapPoints.map((point) => point.speedKph))} km/h`;
+  const startPoint = mapPoints[0] ?? null;
+  const endPoint = mapPoints.at(-1) ?? null;
   const liveStatus = `${points.length} points live`;
 
   useEffect(() => {
@@ -368,40 +427,91 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
     );
   }
 
+  const onSheetPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    dragStartYRef.current = event.clientY;
+    setIsDraggingSheet(true);
+    setSheetDragOffset(0);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const onSheetPointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (dragStartYRef.current === null) {
+      return;
+    }
+
+    const delta = event.clientY - dragStartYRef.current;
+    const clampedDelta = Math.max(-220, Math.min(220, delta));
+    setSheetDragOffset(clampedDelta);
+  };
+
+  const onSheetPointerUp = () => {
+    if (dragStartYRef.current === null) {
+      return;
+    }
+
+    const delta = sheetDragOffset;
+    const movedEnough = Math.abs(delta) >= SHEET_DRAG_THRESHOLD_PX;
+
+    if (movedEnough) {
+      suppressNextClickRef.current = true;
+      setIsSheetExpanded(delta < 0);
+    }
+
+    dragStartYRef.current = null;
+    setIsDraggingSheet(false);
+    setSheetDragOffset(0);
+  };
+
+  const onSheetClick = () => {
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false;
+      return;
+    }
+
+    setIsSheetExpanded((current) => !current);
+  };
+
   return (
     <main className={styles.page}>
       <section className={styles.mapShell}>
-        <div className={styles.liveBadge}>Live tracking</div>
-        <DynamicHistoryMap
-          points={filteredPoints}
-          selectedPointId={activeSelectedPointId}
-          onSelectPoint={setSelectedPointId}
-          isSheetExpanded={isSheetExpanded}
-        />
+        <section className={styles.mapPane}>
+          <div className={styles.liveBadge}>Live tracking</div>
+          <DynamicHistoryMap
+            points={mapPoints}
+            selectedPointId={activeSelectedPointId}
+            onSelectPoint={setSelectedPointId}
+            isSheetExpanded={isSheetExpanded}
+          />
 
-        {dataset.status === "error" ? (
-          <section className={`${styles.overlayCard} ${styles.warningBanner}`}>
-            <p className={styles.warningTitle}>Dataset warning</p>
-            <p>{dataset.message}</p>
-          </section>
-        ) : null}
+          {dataset.status === "error" ? (
+            <section className={`${styles.overlayCard} ${styles.warningBanner}`}>
+              <p className={styles.warningTitle}>Dataset warning</p>
+              <p>{dataset.message}</p>
+            </section>
+          ) : null}
 
-        {pollError ? (
-          <section className={`${styles.overlayCard} ${styles.warningBanner}`}>
-            <p className={styles.warningTitle}>Live refresh warning</p>
-            <p>{pollError}</p>
-          </section>
-        ) : null}
+          {pollError ? (
+            <section className={`${styles.overlayCard} ${styles.warningBanner}`}>
+              <p className={styles.warningTitle}>Live refresh warning</p>
+              <p>{pollError}</p>
+            </section>
+          ) : null}
+        </section>
 
         <section
           className={`${styles.bottomSheet} ${
             isSheetExpanded ? styles.sheetExpanded : styles.sheetCollapsed
-          }`}
+          } ${isDraggingSheet ? styles.sheetDragging : ""}`}
+          style={{ transform: `translateY(${sheetDragOffset}px)` }}
         >
           <button
             type="button"
             className={styles.sheetHandle}
-            onClick={() => setIsSheetExpanded((current) => !current)}
+            onPointerDown={onSheetPointerDown}
+            onPointerMove={onSheetPointerMove}
+            onPointerUp={onSheetPointerUp}
+            onPointerCancel={onSheetPointerUp}
+            onClick={onSheetClick}
             aria-expanded={isSheetExpanded}
           >
             <span className={styles.sheetGrip} />
@@ -415,7 +525,7 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
             <div className={styles.statsRow}>
               <article className={styles.statCard}>
                 <span>Distance</span>
-                <strong>{formatDistance(filteredPoints)}</strong>
+                <strong>{formatDistance(mapPoints)}</strong>
               </article>
               <article className={styles.statCard}>
                 <span>Peak speed</span>
@@ -423,57 +533,22 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
               </article>
               <article className={styles.statCard}>
                 <span>{liveStatus}</span>
-                <strong>{formatShortDateTime(lastRefreshAt)}</strong>
+                <strong>{mapPoints.length} shown on map</strong>
               </article>
             </div>
 
             <div className={styles.detailStack}>
-              <article className={styles.infoCard}>
-                <span className={styles.infoLabel}>Live page</span>
-                <strong className={styles.infoValue}>
-                  /live-tracking/{dataset.imei}?start_at={dataset.startAt}
-                  {dataset.endAt ? `&end_at=${dataset.endAt}` : ""}
-                </strong>
-              </article>
-
-              <div className={styles.rangeGrid}>
-                <label className={styles.field}>
-                  <span>Visible start</span>
-                  <input
-                    type="datetime-local"
-                    value={startDateTime}
-                    onChange={(event) => setStartDateTime(event.target.value)}
-                  />
-                </label>
-
-                <label className={styles.field}>
-                  <span>Visible end</span>
-                  <input
-                    type="datetime-local"
-                    value={endDateTime}
-                    onChange={(event) => {
-                      followEndRef.current = false;
-                      setEndDateTime(event.target.value);
-                    }}
-                  />
-                </label>
-              </div>
-
               <div className={styles.routeSummary}>
                 <article className={styles.infoCard}>
                   <span className={styles.infoLabel}>Start</span>
                   <strong className={styles.infoValue}>
-                    {startPoint ? formatShortDateTime(startPoint.gpsTimestamp) : "Unavailable"}
+                    {startPoint ? formatShortDateTime(startPoint.serverReceivedAt) : "Unavailable"}
                   </strong>
-                </article>
-                <article className={styles.infoCard}>
-                  <span className={styles.infoLabel}>Last sync</span>
-                  <strong className={styles.infoValue}>{formatShortDateTime(lastRefreshAt)}</strong>
                 </article>
                 <article className={styles.infoCard}>
                   <span className={styles.infoLabel}>Latest</span>
                   <strong className={styles.infoValue}>
-                    {endPoint ? formatShortDateTime(endPoint.gpsTimestamp) : "Unavailable"}
+                    {endPoint ? formatShortDateTime(endPoint.serverReceivedAt) : "Unavailable"}
                   </strong>
                 </article>
               </div>
@@ -486,6 +561,7 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
 
                 <div className={styles.timelineList}>
                   {filteredPoints.map((point) => {
+                    const gpsGuard = gpsGuardByPointId.get(point.id) ?? "invalid_gps_time";
                     const itemClassName =
                       point.id === activeSelectedPointId
                         ? `${styles.timelineItem} ${styles.timelineItemSelected}`
@@ -499,7 +575,11 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
                         onClick={() => setSelectedPointId(point.id)}
                       >
                         <div className={styles.timelineMain}>
-                          <strong>{formatShortDateTime(point.gpsTimestamp)}</strong>
+                          <strong>
+                            {formatShortDateTimeWithSeconds(point.serverReceivedAt)}
+                            {gpsGuard === "out_of_range" ? " (gps out-of-range)" : ""}
+                            {gpsGuard === "invalid_gps_time" ? " (invalid gps time)" : ""}
+                          </strong>
                           <span>{point.speedKph} km/h</span>
                         </div>
                         <div className={styles.timelineMeta}>

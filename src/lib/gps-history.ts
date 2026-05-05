@@ -1,7 +1,41 @@
 import type { GpsHistoryApiResponse, GpsHistoryDataset, GpsHistoryPoint } from "@/types/gps";
 
-const GPS_HISTORY_API_BASE_URL =
-  process.env.GPS_HISTORY_API_BASE_URL ?? "http://147.93.156.141:5001/api";
+const DEFAULT_GPS_HISTORY_API_BASE_URL =
+  process.env.NODE_ENV === "development"
+    ? "http://localhost:5001/api"
+    : "http://147.93.156.141:5001/api";
+
+function normalizeApiBaseUrl(value: string) {
+  return value.trim().replace(/\/+$/, "");
+}
+
+function isLocalHostUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
+function resolveGpsHistoryApiBaseUrl() {
+  const configured = process.env.GPS_HISTORY_API_BASE_URL;
+
+  if (!configured) {
+    return DEFAULT_GPS_HISTORY_API_BASE_URL;
+  }
+
+  const normalized = normalizeApiBaseUrl(configured);
+
+  // Guard against misconfigured production deployments that still point to localhost.
+  if (process.env.NODE_ENV === "production" && isLocalHostUrl(normalized)) {
+    return "http://147.93.156.141:5001/api";
+  }
+
+  return normalized;
+}
+
+const GPS_HISTORY_API_BASE_URL = resolveGpsHistoryApiBaseUrl();
 const DEFAULT_IMEI = "866221070478388";
 const DEFAULT_START_AT = "2026-04-18T10:00:00Z";
 
@@ -50,12 +84,26 @@ function toNumber(value: number | string, fallback = 0) {
 }
 
 function sortPoints(points: GpsHistoryPoint[]) {
-  return [...points].sort((left, right) => {
-    const leftTime = Date.parse(left.gpsTimestamp || left.serverReceivedAt);
-    const rightTime = Date.parse(right.gpsTimestamp || right.serverReceivedAt);
+  const parseTime = (value: string) => {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
 
-    if (leftTime !== rightTime) {
-      return leftTime - rightTime;
+  return [...points].sort((left, right) => {
+    // Keep route chronology aligned to ingestion time because gpsTimestamp
+    // can be stale/out-of-order for some devices.
+    const leftServerTime = parseTime(left.serverReceivedAt);
+    const rightServerTime = parseTime(right.serverReceivedAt);
+
+    if (leftServerTime !== rightServerTime) {
+      return leftServerTime - rightServerTime;
+    }
+
+    const leftGpsTime = parseTime(left.gpsTimestamp);
+    const rightGpsTime = parseTime(right.gpsTimestamp);
+
+    if (leftGpsTime !== rightGpsTime) {
+      return leftGpsTime - rightGpsTime;
     }
 
     return left.id - right.id;
@@ -172,8 +220,10 @@ export async function fetchGpsHistory({
   }
 
   try {
+    const requestUrl = `${GPS_HISTORY_API_BASE_URL}/devices/${encodeURIComponent(effectiveImei)}/locations?${queryParams.toString()}`;
+
     const response = await fetch(
-      `${GPS_HISTORY_API_BASE_URL}/devices/${encodeURIComponent(effectiveImei)}/locations?${queryParams.toString()}`,
+      requestUrl,
       { cache: "no-store" },
     );
 
@@ -205,7 +255,9 @@ export async function fetchGpsHistory({
 
     return {
       status: "ready",
-      points: sortPoints(payload.points.map((point, index) => toPoint(payload.imei, point, index))),
+      points: sortPoints(
+        payload.points.map((point, index) => toPoint(payload.imei, point, index)),
+      ),
       imei: payload.imei,
       startAt: normalizeTimestamp(payload.start_at),
       endAt: normalizeOptionalTimestamp(payload.end_at ?? effectiveEndAt),
@@ -215,7 +267,9 @@ export async function fetchGpsHistory({
     return {
       status: "error",
       message:
-        error instanceof Error ? error.message : "Failed to fetch GPS history from the API.",
+        error instanceof Error
+          ? `Failed to fetch GPS history from ${GPS_HISTORY_API_BASE_URL}: ${error.message}`
+          : "Failed to fetch GPS history from the API.",
       points: [],
       imei: effectiveImei,
       startAt: effectiveStartAt,
