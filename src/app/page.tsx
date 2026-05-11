@@ -86,7 +86,7 @@ export default function Home() {
                   <span>verifikasi cepat</span>
                   <a
                     className={styles.planAction}
-                    href="https://wa.me/6281234567890"
+                    href="https://wa.me/6282171558690"
                     target="_blank"
                     rel="noreferrer"
                   >
