@@ -31,7 +31,7 @@ export default function Home() {
             <div className={styles.actions}>
               <a
                 className={styles.primaryAction}
-                href="https://wa.me/6281234567890"
+                href="https://wa.me/6282171558690"
                 target="_blank"
                 rel="noreferrer"
               >
