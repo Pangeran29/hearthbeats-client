@@ -28,8 +28,6 @@ type LiveTrackingViewerProps = {
 const LIVE_POLL_INTERVAL_MS = 10_000;
 const SHEET_DRAG_THRESHOLD_PX = 24;
 
-type GpsGuardStatus = "in_range" | "out_of_range" | "invalid_gps_time";
-
 function toInputDateTime(value: string) {
   const date = new Date(value);
 
@@ -126,23 +124,6 @@ function parseRangeEndInclusive(value: string) {
   return parsed + 59_999;
 }
 
-function classifyGpsGuardStatus(
-  point: GpsHistoryPoint,
-  parsedStart: number | null,
-  parsedEnd: number | null,
-): GpsGuardStatus {
-  const gpsTime = Date.parse(point.gpsTimestamp);
-
-  if (Number.isNaN(gpsTime)) {
-    return "invalid_gps_time";
-  }
-
-  const startsAfter = parsedStart === null || gpsTime >= parsedStart;
-  const endsBefore = parsedEnd === null || gpsTime <= parsedEnd;
-
-  return startsAfter && endsBefore ? "in_range" : "out_of_range";
-}
-
 function buildRange(points: GpsHistoryPoint[], fallbackStartAt: string) {
   if (points.length === 0) {
     const normalizedFallback = toInputDateTime(fallbackStartAt);
@@ -237,18 +218,6 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
       return startsAfter && endsBefore;
     });
   }, [endDateTime, isInvalidRange, points, startDateTime]);
-
-  const gpsGuardByPointId = useMemo(() => {
-    const parsedStart = startDateTime === "" ? null : parseRangeStart(startDateTime);
-    const parsedEnd = endDateTime === "" ? null : parseRangeEndInclusive(endDateTime);
-    const statusById = new Map<number, GpsGuardStatus>();
-
-    for (const point of filteredPoints) {
-      statusById.set(point.id, classifyGpsGuardStatus(point, parsedStart, parsedEnd));
-    }
-
-    return statusById;
-  }, [endDateTime, filteredPoints, startDateTime]);
 
   const mapPoints = filteredPoints;
 
@@ -557,7 +526,6 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
 
                 <div className={styles.timelineList}>
                   {filteredPoints.map((point) => {
-                    const gpsGuard = gpsGuardByPointId.get(point.id) ?? "invalid_gps_time";
                     const itemClassName =
                       point.id === activeSelectedPointId
                         ? `${styles.timelineItem} ${styles.timelineItemSelected}`
@@ -573,8 +541,6 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
                         <div className={styles.timelineMain}>
                           <strong>
                             {formatShortDateTimeWithSeconds(point.serverReceivedAt)}
-                            {gpsGuard === "out_of_range" ? " (gps out-of-range)" : ""}
-                            {gpsGuard === "invalid_gps_time" ? " (invalid gps time)" : ""}
                           </strong>
                           <span>{point.speedKph} km/h</span>
                         </div>
