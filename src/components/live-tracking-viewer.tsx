@@ -250,11 +250,7 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
     return statusById;
   }, [endDateTime, filteredPoints, startDateTime]);
 
-  const mapPoints = useMemo(() => {
-    return filteredPoints.filter(
-      (point) => gpsGuardByPointId.get(point.id) === "in_range",
-    );
-  }, [filteredPoints, gpsGuardByPointId]);
+  const mapPoints = filteredPoints;
 
   const activeSelectedPointId = mapPoints.some(
     (point) => point.id === selectedPointId,
