@@ -1,5 +1,9 @@
 import { LiveTrackingViewer } from "@/components/live-tracking-viewer";
-import { fetchGpsHistory, getDefaultGpsHistoryParams } from "@/lib/gps-history";
+import {
+  fetchDeviceLastActiveAt,
+  fetchGpsHistory,
+  getDefaultGpsHistoryParams,
+} from "@/lib/gps-history";
 
 type LiveTrackingPageProps = {
   params: Promise<{ imei: string }>;
@@ -15,16 +19,20 @@ export default async function LiveTrackingPage({
   const defaults = getDefaultGpsHistoryParams();
   const hasStartAt = Boolean(query.start_at);
   const isFixedRoute = Boolean(query.start_at && query.end_at);
-  const dataset = await fetchGpsHistory({
-    imei,
-    startAt: hasStartAt ? query.start_at : defaults.startAt,
-    endAt: isFixedRoute ? query.end_at : undefined,
-  });
+  const [dataset, lastActiveAt] = await Promise.all([
+    fetchGpsHistory({
+      imei,
+      startAt: hasStartAt ? query.start_at : defaults.startAt,
+      endAt: isFixedRoute ? query.end_at : undefined,
+    }),
+    fetchDeviceLastActiveAt(imei),
+  ]);
 
   return (
     <LiveTrackingViewer
       dataset={dataset}
       mode={isFixedRoute ? "route" : hasStartAt ? "live-route" : "live"}
+      lastActiveAt={lastActiveAt}
     />
   );
 }

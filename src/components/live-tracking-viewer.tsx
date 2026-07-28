@@ -10,7 +10,14 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  type FormEvent,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 
 import type {
   GpsHistoryDataset,
@@ -36,6 +43,7 @@ type LiveTrackingViewerProps = {
   historyDate?: string;
   sessionsDataset?: TrackingSessionsDataset;
   selectedSession?: TrackingSession;
+  lastActiveAt?: string;
   dateError?: string;
   sessionSelectionError?: string;
 };
@@ -208,6 +216,51 @@ function getFreshness(value: string, now: number) {
   };
 }
 
+function formatLastActive(value: string, now: number) {
+  const receivedAt = Date.parse(value);
+
+  if (Number.isNaN(receivedAt)) {
+    return "Terakhir aktif tidak diketahui";
+  }
+
+  const ageMinutes = Math.max(
+    0,
+    Math.floor((now - receivedAt) / (60 * 1000)),
+  );
+
+  if (ageMinutes < 1) {
+    return "Terakhir aktif baru saja";
+  }
+
+  if (ageMinutes < 60) {
+    return `Terakhir aktif ${ageMinutes} mnt lalu`;
+  }
+
+  if (ageMinutes < 24 * 60) {
+    return `Terakhir aktif ${Math.floor(ageMinutes / 60)} jam lalu`;
+  }
+
+  return `Terakhir aktif ${Math.floor(ageMinutes / (24 * 60))} hari lalu`;
+}
+
+function latestTimestamp(
+  primary: string | undefined,
+  fallback: string,
+) {
+  const primaryTime = Date.parse(primary ?? "");
+  const fallbackTime = Date.parse(fallback);
+
+  if (Number.isNaN(primaryTime)) {
+    return fallback;
+  }
+
+  if (Number.isNaN(fallbackTime)) {
+    return primary as string;
+  }
+
+  return primaryTime >= fallbackTime ? (primary as string) : fallback;
+}
+
 function MapIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -251,6 +304,7 @@ export function LiveTrackingViewer({
   historyDate,
   sessionsDataset,
   selectedSession,
+  lastActiveAt,
   dateError,
   sessionSelectionError,
 }: LiveTrackingViewerProps) {
@@ -275,6 +329,8 @@ export function LiveTrackingViewer({
   const didDragSheetRef = useRef(false);
   const [pollError, setPollError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [isDatePending, startDateTransition] = useTransition();
+  const router = useRouter();
   const latestTimestampRef = useRef(dataset.latestServerReceivedAt);
   const nextIdRef = useRef(initialPoints.length);
 
@@ -374,6 +430,11 @@ export function LiveTrackingViewer({
     latestPoint?.serverReceivedAt ?? dataset.latestServerReceivedAt,
     now,
   );
+  const headerLastActiveAt = latestTimestamp(
+    latestPoint?.serverReceivedAt,
+    lastActiveAt ?? dataset.latestServerReceivedAt,
+  );
+  const headerFreshness = getFreshness(headerLastActiveAt, now);
   const mapPoints =
     mode === "live" ? (latestPoint ? [latestPoint] : []) : points;
   const mapMode =
@@ -397,6 +458,24 @@ export function LiveTrackingViewer({
       : null;
   const showsElapsedDuration =
     mode === "live-route" || selectedSession?.state === "ongoing";
+
+  const handleHistorySubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const dateInput = event.currentTarget.elements.namedItem(
+      "date",
+    ) as HTMLInputElement | null;
+    const date = dateInput?.value;
+
+    if (!date) {
+      return;
+    }
+
+    startDateTransition(() => {
+      router.push(`${historyHref}?date=${encodeURIComponent(date)}`, {
+        scroll: false,
+      });
+    });
+  };
 
   const getExpandedSheetHeight = () =>
     Math.min(window.innerHeight * 0.68, MAX_EXPANDED_SHEET_HEIGHT);
@@ -523,46 +602,39 @@ export function LiveTrackingViewer({
           </div>
           <div
             className={`${styles.freshness} ${
-              mode === "route" ||
-              (mode === "history" && selectedSession?.state !== "ongoing")
-                ? styles.routeTone
-                : styles[freshness.tone]
+              styles[headerFreshness.tone]
             }`}
           >
             <span />
-            {mode === "route"
-              ? "Rute perjalanan"
-              : mode === "history"
-                ? selectedSession?.state === "ongoing"
-                  ? "Sedang berlangsung"
-                  : selectedSession
-                    ? "Rute perjalanan"
-                    : "Riwayat"
-              : mode === "live-route" && freshness.isActive
-                ? "Melacak langsung"
-                : freshness.label}
+            {formatLastActive(headerLastActiveAt, now)}
           </div>
         </header>
 
-        {mode === "history" ? (
-          <form className={styles.datePanel} method="get">
+        {isHistoryIndex ? (
+          <form
+            className={styles.datePanel}
+            method="get"
+            onSubmit={handleHistorySubmit}
+            aria-busy={isDatePending}
+          >
             <div className={styles.datePanelHeading}>
-              <div>
-                <strong>Riwayat perjalanan</strong>
-                <span>{formatCalendarDate(historyDate)}</span>
-              </div>
-              <button type="submit">Tampilkan</button>
+              <strong>Riwayat perjalanan</strong>
+              <span>{formatCalendarDate(historyDate)}</span>
             </div>
             <div className={styles.dateFields}>
               <label>
-                <span>Tanggal perjalanan</span>
+                <span className={styles.srOnly}>Tanggal perjalanan</span>
                 <input
+                  key={historyDate}
                   type="date"
                   name="date"
                   defaultValue={historyDate}
                   required
                 />
               </label>
+              <button type="submit" disabled={isDatePending}>
+                {isDatePending ? "Memuat..." : "Tampilkan"}
+              </button>
             </div>
             {dateError ? (
               <p className={styles.fieldError}>{dateError}</p>
@@ -584,7 +656,7 @@ export function LiveTrackingViewer({
           {(hasError || pollError) && (
             <div
               className={`${styles.warning} ${
-                mode === "history" ? styles.warningHistory : ""
+                isHistoryIndex ? styles.warningHistory : ""
               }`}
               role="status"
             >

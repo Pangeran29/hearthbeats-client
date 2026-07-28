@@ -358,6 +358,37 @@ export async function fetchTrackingSessions({
   }
 }
 
+export async function fetchDeviceLastActiveAt(imei?: string) {
+  const effectiveImei = imei?.trim() || DEFAULT_IMEI;
+
+  try {
+    const response = await fetch(
+      `${GPS_HISTORY_API_BASE_URL}/devices/${encodeURIComponent(effectiveImei)}/activity`,
+      { cache: "no-store" },
+    );
+
+    if (!response.ok) {
+      return undefined;
+    }
+
+    const payload: unknown = await response.json();
+
+    if (!payload || typeof payload !== "object") {
+      return undefined;
+    }
+
+    const device = payload as Record<string, unknown>;
+    const lastSeenAt =
+      device.imei === effectiveImei ? device.last_seen_at : undefined;
+
+    return typeof lastSeenAt === "string"
+      ? normalizeTimestamp(lastSeenAt)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function fetchGpsHistory({
   imei,
   startAt,

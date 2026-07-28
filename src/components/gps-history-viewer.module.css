@@ -96,10 +96,6 @@
   color: var(--alert-red);
 }
 
-.routeTone {
-  color: var(--route-orange);
-}
-
 .liveLabel {
   position: absolute;
   top: calc(80px + env(safe-area-inset-top));
@@ -120,10 +116,10 @@
   top: calc(78px + env(safe-area-inset-top));
   left: 12px;
   right: 12px;
-  z-index: 650;
+  z-index: 1200;
   display: grid;
-  gap: 10px;
-  padding: 12px;
+  gap: 8px;
+  padding: 10px;
   border: 1px solid var(--quiet-border);
   border-radius: 14px;
   background: var(--paper);
@@ -137,14 +133,8 @@
   gap: 12px;
 }
 
-.datePanelHeading > div {
-  min-width: 0;
-  display: grid;
-  gap: 1px;
-}
-
 .datePanelHeading strong {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 650;
 }
 
@@ -156,9 +146,15 @@
   white-space: nowrap;
 }
 
-.datePanelHeading button {
-  min-height: 36px;
-  padding: 0 13px;
+.dateFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.dateFields button {
+  min-height: 44px;
+  padding: 0 14px;
   border: 0;
   border-radius: 9px;
   background: var(--route-orange);
@@ -168,33 +164,25 @@
   cursor: pointer;
 }
 
-.datePanelHeading button:active {
+.dateFields button:not(:disabled):active {
   background: var(--route-orange-deep);
   transform: scale(0.98);
 }
 
-.dateFields {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
+.dateFields button:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .dateFields label {
-  display: grid;
-  gap: 4px;
-}
-
-.dateFields label > span {
-  color: var(--muted-ink);
-  font-size: 11px;
-  font-weight: 500;
+  min-width: 0;
 }
 
 .dateFields input {
   width: 100%;
   min-width: 0;
-  height: 42px;
-  padding: 0 8px;
+  height: 44px;
+  padding: 0 10px;
   border: 1px solid var(--quiet-border);
   border-radius: 9px;
   background: var(--quiet-surface);
@@ -243,7 +231,7 @@
 }
 
 .warningHistory {
-  top: calc(216px + env(safe-area-inset-top));
+  top: calc(190px + env(safe-area-inset-top));
 }
 
 .warning span,

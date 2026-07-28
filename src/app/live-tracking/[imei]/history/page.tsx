@@ -1,5 +1,6 @@
 import { LiveTrackingViewer } from "@/components/live-tracking-viewer";
 import {
+  fetchDeviceLastActiveAt,
   fetchGpsHistory,
   fetchTrackingSessions,
   getTodayWibDate,
@@ -23,10 +24,13 @@ export default async function HistoryPage({
   const requestedRange = wibDateToUtcRange(requestedDate);
   const selectedDate = requestedRange ? requestedDate : today;
   const dateRange = requestedRange ?? wibDateToUtcRange(today);
-  const sessionsDataset = await fetchTrackingSessions({
-    imei,
-    date: selectedDate,
-  });
+  const [sessionsDataset, lastActiveAt] = await Promise.all([
+    fetchTrackingSessions({
+      imei,
+      date: selectedDate,
+    }),
+    fetchDeviceLastActiveAt(imei),
+  ]);
   const requestedSessionId = Number(query.session_id);
   const hasRequestedSession =
     typeof query.session_id === "string" &&
@@ -63,12 +67,13 @@ export default async function HistoryPage({
 
   return (
     <LiveTrackingViewer
-      key={`${selectedDate}:${selectedSession?.id ?? "list"}`}
+      key={selectedSession?.id ?? "list"}
       dataset={dataset}
       mode="history"
       historyDate={selectedDate}
       sessionsDataset={sessionsDataset}
       selectedSession={selectedSession}
+      lastActiveAt={lastActiveAt}
       dateError={requestedRange ? undefined : "Tanggal tidak valid."}
       sessionSelectionError={sessionSelectionError}
     />
