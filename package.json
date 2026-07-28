@@ -10,6 +10,7 @@
     "convert:gps-history": "node scripts/convert-device-locations.mjs"
   },
   "dependencies": {
+    "html-to-image": "^1.11.13",
     "leaflet": "^1.9.4",
     "next": "16.2.3",
     "react": "19.2.4",

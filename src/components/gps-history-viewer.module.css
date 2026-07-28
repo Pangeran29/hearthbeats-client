@@ -486,6 +486,49 @@
   text-decoration: none;
 }
 
+.historyActions {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.historyActions .historyBackLink {
+  margin-bottom: 0;
+}
+
+.shareJourneyButton {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid var(--route-orange);
+  border-radius: 9px;
+  color: var(--paper);
+  background: var(--route-orange);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shareJourneyButton:active {
+  background: var(--route-orange-deep);
+  transform: scale(0.98);
+}
+
+.shareJourneyButton svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .historyBackLink:focus-visible {
   border-radius: 6px;
   outline: 3px solid color-mix(in srgb, var(--route-orange) 35%, transparent);
@@ -499,7 +542,15 @@
   flex: 0 0 auto;
 }
 
+.durationMetric {
+  flex: 0 0 auto;
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+}
+
 .speedMetric strong,
+.durationMetric strong,
 .metrics strong {
   font-family: var(--font-barlow-condensed), sans-serif;
   font-variant-numeric: tabular-nums;
@@ -512,6 +563,17 @@
 }
 
 .speedMetric span {
+  font-size: 11px;
+}
+
+.durationMetric strong {
+  font-size: 26px;
+  line-height: 1;
+  font-weight: 650;
+}
+
+.durationMetric span {
+  color: var(--muted-ink);
   font-size: 11px;
 }
 

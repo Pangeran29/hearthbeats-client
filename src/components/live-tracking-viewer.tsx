@@ -25,6 +25,7 @@ import type {
   TrackingSession,
   TrackingSessionsDataset,
 } from "@/types/gps";
+import { JourneyShareModal } from "./journey-share-modal";
 import styles from "./gps-history-viewer.module.css";
 
 const DynamicHistoryMap = dynamic(
@@ -98,12 +99,33 @@ function formatCalendarDate(value?: string) {
 }
 
 function formatClock(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
   return new Intl.DateTimeFormat("id-ID", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
     timeZone: "Asia/Jakarta",
-  }).format(new Date(value));
+  }).format(date);
+}
+
+function formatRouteDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  }).format(date);
 }
 
 function formatDurationSeconds(value: number) {
@@ -330,6 +352,7 @@ export function LiveTrackingViewer({
   const [pollError, setPollError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [isDatePending, startDateTransition] = useTransition();
+  const [isShareOpen, setIsShareOpen] = useState(false);
   const router = useRouter();
   const latestTimestampRef = useRef(dataset.latestServerReceivedAt);
   const nextIdRef = useRef(initialPoints.length);
@@ -425,7 +448,6 @@ export function LiveTrackingViewer({
   const peakSpeed =
     points.length > 0 ? Math.max(...points.map((point) => point.speedKph)) : 0;
   const distance = calculateDistance(points);
-  const elapsedTracking = formatElapsedDuration(dataset.startAt, now);
   const freshness = getFreshness(
     latestPoint?.serverReceivedAt ?? dataset.latestServerReceivedAt,
     now,
@@ -456,8 +478,18 @@ export function LiveTrackingViewer({
     sessionsDataset?.status === "error"
       ? "Daftar perjalanan belum bisa dimuat. Coba lagi beberapa saat."
       : null;
-  const showsElapsedDuration =
-    mode === "live-route" || selectedSession?.state === "ongoing";
+  const routeStartAt = selectedSession?.startedAt ?? dataset.startAt;
+  const routeEndAt = selectedSession?.endedAt ?? dataset.endAt;
+  const routeDuration =
+    selectedSession?.state === "completed"
+      ? formatDurationSeconds(selectedSession.durationSeconds)
+      : formatElapsedDuration(
+          routeStartAt,
+          routeEndAt ? Date.parse(routeEndAt) : now,
+        );
+  const routeTimeRange = `${formatClock(routeStartAt)} - ${
+    routeEndAt ? formatClock(routeEndAt) : "sekarang"
+  }`;
 
   const handleHistorySubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -794,17 +826,35 @@ export function LiveTrackingViewer({
             ) : (
               <>
                 {isHistorySelected ? (
-                  <Link
-                    className={styles.historyBackLink}
-                    href={`${historyHref}?date=${encodeURIComponent(
-                      historyDate ?? "",
-                    )}`}
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="m15 18-6-6 6-6" />
-                    </svg>
-                    Semua perjalanan
-                  </Link>
+                  <div className={styles.historyActions}>
+                    <Link
+                      className={styles.historyBackLink}
+                      href={`${historyHref}?date=${encodeURIComponent(
+                        historyDate ?? "",
+                      )}`}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m15 18-6-6 6-6" />
+                      </svg>
+                      Semua perjalanan
+                    </Link>
+                    {selectedSession?.state === "completed" &&
+                    points.length > 1 ? (
+                      <button
+                        type="button"
+                        className={styles.shareJourneyButton}
+                        onClick={() => setIsShareOpen(true)}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <circle cx="18" cy="5" r="3" />
+                          <circle cx="6" cy="12" r="3" />
+                          <circle cx="18" cy="19" r="3" />
+                          <path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4" />
+                        </svg>
+                        Bagikan
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null}
             <div className={styles.sheetHeading}>
               <div>
@@ -813,27 +863,32 @@ export function LiveTrackingViewer({
                     ? freshness.isActive
                       ? "Motor aktif"
                       : "Posisi terakhir"
-                    : mode === "live-route"
-                      ? `Tracking sejak ${formatTime(dataset.startAt, true)}`
-                      : isHistorySelected &&
-                          selectedSession?.state === "ongoing"
-                        ? `Berlangsung sejak ${formatTime(
-                            selectedSession.startedAt,
-                            true,
-                          )}`
-                    : "Ringkasan rute"}
+                    : `Ringkasan rute · ${formatRouteDate(routeStartAt)}`}
                 </span>
                 <h1>
-                  {latestPoint
-                    ? shouldPoll
-                      ? `Diterima ${formatTime(latestPoint.serverReceivedAt, true)}`
-                      : formatTime(latestPoint.serverReceivedAt, true)
-                    : "Belum tersedia"}
+                  {hasRouteDetails
+                    ? routeTimeRange
+                    : latestPoint
+                      ? `Diterima ${formatTime(
+                          latestPoint.serverReceivedAt,
+                          true,
+                        )}`
+                      : "Belum tersedia"}
                 </h1>
               </div>
-              <div className={styles.speedMetric}>
-                <strong>{Math.round(latestPoint?.speedKph ?? 0)}</strong>
-                <span>km/j</span>
+              <div
+                className={
+                  hasRouteDetails
+                    ? styles.durationMetric
+                    : styles.speedMetric
+                }
+              >
+                <strong>
+                  {hasRouteDetails
+                    ? routeDuration
+                    : Math.round(latestPoint?.speedKph ?? 0)}
+                </strong>
+                <span>{hasRouteDetails ? "Durasi" : "km/j"}</span>
               </div>
             </div>
 
@@ -848,10 +903,8 @@ export function LiveTrackingViewer({
                   <strong>{Math.round(peakSpeed)} km/j</strong>
                 </div>
                 <div>
-                  <span>{showsElapsedDuration ? "Durasi" : "Titik GPS"}</span>
-                  <strong>
-                    {showsElapsedDuration ? elapsedTracking : points.length}
-                  </strong>
+                  <span>Titik GPS</span>
+                  <strong>{points.length}</strong>
                 </div>
               </div>
             ) : (
@@ -964,6 +1017,16 @@ export function LiveTrackingViewer({
             <span>Riwayat</span>
           </Link>
         </nav>
+        {selectedSession?.state === "completed" && points.length > 1 ? (
+          <JourneyShareModal
+            isOpen={isShareOpen}
+            onClose={() => setIsShareOpen(false)}
+            points={points}
+            session={selectedSession}
+            distanceKm={selectedSession.distanceKm}
+            peakSpeedKph={peakSpeed}
+          />
+        ) : null}
       </section>
     </main>
   );
