@@ -11,13 +11,20 @@ export default async function LiveTrackingPage({
   searchParams,
 }: LiveTrackingPageProps) {
   const { imei } = await params;
-  const { start_at: startAt, end_at: endAt } = await searchParams;
+  const query = await searchParams;
   const defaults = getDefaultGpsHistoryParams();
+  const hasStartAt = Boolean(query.start_at);
+  const isFixedRoute = Boolean(query.start_at && query.end_at);
   const dataset = await fetchGpsHistory({
     imei,
-    startAt: startAt ?? defaults.startAt,
-    endAt,
+    startAt: hasStartAt ? query.start_at : defaults.startAt,
+    endAt: isFixedRoute ? query.end_at : undefined,
   });
 
-  return <LiveTrackingViewer dataset={dataset} />;
+  return (
+    <LiveTrackingViewer
+      dataset={dataset}
+      mode={isFixedRoute ? "route" : hasStartAt ? "live-route" : "live"}
+    />
+  );
 }

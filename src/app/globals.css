@@ -1,11 +1,19 @@
 @import "leaflet/dist/leaflet.css";
 
 :root {
-  --background: #fff9f1;
-  --foreground: #0f172a;
-  --ink-1: #0f172a;
-  --ink-2: #334155;
-  --ink-3: #64748b;
+  --route-orange: #e4512b;
+  --route-orange-deep: #b73a20;
+  --warm-canvas: #f4f1ea;
+  --paper: #fffdf8;
+  --quiet-surface: #f8f5ef;
+  --ink: #20231f;
+  --muted-ink: #6b6e68;
+  --quiet-border: #ddd8ce;
+  --live-green: #168b52;
+  --warning-amber: #b97316;
+  --alert-red: #c83e32;
+  --background: var(--warm-canvas);
+  --foreground: var(--ink);
 }
 
 html {
@@ -24,7 +32,7 @@ body {
   flex-direction: column;
   color: var(--foreground);
   background: var(--background);
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-family: var(--font-barlow), sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -44,4 +52,16 @@ button,
 input,
 select {
   font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--route-orange) 42%, transparent);
+  outline-offset: 2px;
 }

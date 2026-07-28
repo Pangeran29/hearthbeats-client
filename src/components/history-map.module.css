@@ -16,27 +16,125 @@
 
 .map :global(.leaflet-control-zoom) {
   border: 0;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 8px 22px rgb(32 35 31 / 18%);
 }
 
 .map :global(.leaflet-control-zoom a) {
   width: 38px;
   height: 38px;
   line-height: 38px;
-  color: #0f172a;
+  color: #20231f;
+  background: #fffdf8;
 }
 
 .map :global(.leaflet-control-attribution) {
-  background: rgba(255, 255, 255, 0.92);
+  max-width: 220px;
+  background: rgb(255 253 248 / 92%);
+  border-radius: 8px 0 0;
+  padding: 2px 5px;
+  color: #6b6e68;
+  font-size: 9px;
+}
+
+.recenterButton {
+  position: absolute;
+  right: 14px;
+  bottom: calc(330px + env(safe-area-inset-bottom));
+  z-index: 800;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 2px solid #fffdf8;
+  border-radius: 50%;
+  color: #e4512b;
+  background: #fffdf8;
+  box-shadow: 0 5px 14px rgb(32 35 31 / 20%);
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.recenterButton:hover {
+  color: #b73a20;
+}
+
+.recenterButton:active {
+  transform: scale(0.94);
+}
+
+.recenterButton svg {
+  width: 23px;
+  height: 23px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.speedLegend {
+  position: absolute;
+  left: 12px;
+  z-index: 800;
+  display: grid;
+  gap: 6px;
+  width: max-content;
+  padding: 9px 10px;
+  border: 1px solid rgb(221 216 206 / 88%);
   border-radius: 10px;
-  padding: 0.2rem 0.45rem;
-  color: #475569;
+  color: #20231f;
+  background: rgb(255 253 248 / 96%);
+  box-shadow: 0 6px 18px rgb(32 35 31 / 14%);
+  font-family: var(--font-barlow), sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: none;
+  transition: bottom 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.speedLegend span {
+  display: grid;
+  grid-template-columns: 20px auto auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.speedLegend i {
+  width: 20px;
+  height: 4px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgb(255 253 248 / 80%);
+}
+
+.speedLegend small {
+  color: #6b6e68;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.speedSlow {
+  background: #168b52;
+}
+
+.speedMedium {
+  background: #e7a400;
+}
+
+.speedFast {
+  background: #d93c32;
 }
 
 .popup {
   display: grid;
-  gap: 0.3rem;
-  font-size: 0.9rem;
+  gap: 3px;
+  color: #20231f;
+  font-family: var(--font-barlow), sans-serif;
+  font-size: 12px;
 }
 
 .markerBadge {
@@ -44,26 +142,40 @@
   border: 0;
 }
 
-.markerInner {
+.routeMarker {
+  min-width: 46px;
+  height: 28px;
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  background: #0f172a;
-  color: #fff7ed;
-  border: 2px solid #ffedd5;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.2);
-  font-size: 0.72rem;
-  font-weight: 700;
+  padding: 0 9px;
+  border: 2px solid #fffdf8;
+  border-radius: 8px;
+  color: #fffdf8;
+  box-shadow: 0 6px 16px rgb(32 35 31 / 22%);
+  font-family: var(--font-barlow), sans-serif;
+  font-size: 12px;
+  font-weight: 650;
 }
 
-@media (min-width: 760px) {
-  .map :global(.leaflet-right .leaflet-control) {
-    margin-right: 20px;
-  }
+.routeMarkerStart {
+  background: #20231f;
+}
 
-  .map :global(.leaflet-bottom .leaflet-control) {
-    margin-bottom: 20px;
-  }
+.routeMarkerEnd {
+  background: #e4512b;
+}
+
+.latestLocationPin {
+  display: block;
+  width: 40px;
+  height: 48px;
+  filter: drop-shadow(0 4px 5px rgb(32 35 31 / 24%));
+}
+
+.latestLocationPin svg {
+  display: block;
+  width: 40px;
+  height: 48px;
+  overflow: visible;
+  shape-rendering: geometricPrecision;
 }

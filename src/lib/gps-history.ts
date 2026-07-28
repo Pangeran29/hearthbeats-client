@@ -1,9 +1,6 @@
 import type { GpsHistoryApiResponse, GpsHistoryDataset, GpsHistoryPoint } from "@/types/gps";
 
-const DEFAULT_GPS_HISTORY_API_BASE_URL =
-  process.env.NODE_ENV === "development"
-    ? "http://localhost:5001/api"
-    : "http://147.93.156.141:5001/api";
+const DEFAULT_GPS_HISTORY_API_BASE_URL = "http://147.93.156.141:5001/api";
 
 function normalizeApiBaseUrl(value: string) {
   return value.trim().replace(/\/+$/, "");
@@ -37,7 +34,52 @@ function resolveGpsHistoryApiBaseUrl() {
 
 const GPS_HISTORY_API_BASE_URL = resolveGpsHistoryApiBaseUrl();
 const DEFAULT_IMEI = "866221070478388";
-const DEFAULT_START_AT = "2026-04-18T10:00:00Z";
+const WIB_OFFSET = "+07:00";
+
+function formatWibDate(date: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "Asia/Jakarta",
+  }).format(date);
+}
+
+export function getTodayWibDate() {
+  return formatWibDate(new Date());
+}
+
+export function getDefaultHistoryDates() {
+  const today = new Date();
+  const sixDaysAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
+
+  return {
+    startDate: formatWibDate(sixDaysAgo),
+    endDate: formatWibDate(today),
+  };
+}
+
+export function wibDateRangeToUtc(startDate: string, endDate: string) {
+  const start = new Date(`${startDate}T00:00:00${WIB_OFFSET}`);
+  const end = new Date(`${endDate}T23:59:59.999${WIB_OFFSET}`);
+
+  if (
+    Number.isNaN(start.getTime()) ||
+    Number.isNaN(end.getTime()) ||
+    start.getTime() > end.getTime()
+  ) {
+    return null;
+  }
+
+  return {
+    startAt: start.toISOString(),
+    endAt: end.toISOString(),
+  };
+}
+
+export function getWibDayStartUtc(date = getTodayWibDate()) {
+  return new Date(`${date}T00:00:00${WIB_OFFSET}`).toISOString();
+}
 
 function normalizeTimestamp(value: string) {
   if (!value) {
@@ -194,7 +236,7 @@ function toPoint(
 export function getDefaultGpsHistoryParams() {
   return {
     imei: DEFAULT_IMEI,
-    startAt: DEFAULT_START_AT,
+    startAt: getWibDayStartUtc(),
   };
 }
 
@@ -208,7 +250,7 @@ export async function fetchGpsHistory({
   endAt?: string;
 }): Promise<GpsHistoryDataset> {
   const effectiveImei = imei?.trim() || DEFAULT_IMEI;
-  const effectiveStartAt = startAt?.trim() || DEFAULT_START_AT;
+  const effectiveStartAt = startAt?.trim() || getWibDayStartUtc();
   const effectiveEndAt = endAt?.trim() || undefined;
 
   const queryParams = new URLSearchParams({

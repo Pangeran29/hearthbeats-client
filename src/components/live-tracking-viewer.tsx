@@ -1,7 +1,16 @@
 "use client";
 
+/*
+ * THESIS: a calm motorcycle roadbook, not a fleet dashboard.
+ * OWN-WORLD: warm paper, charcoal ink, and route orange frame a real map.
+ * STORY: locate the motorcycle, judge data freshness, then inspect the journey.
+ * FIRST VIEWPORT: map, latest state, and the next navigation choice stay visible.
+ * FORM: a centered phone canvas with one map, one sheet, and two destinations.
+ */
+
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 
 import type { GpsHistoryDataset, GpsHistoryPoint } from "@/types/gps";
 import styles from "./gps-history-viewer.module.css";
@@ -10,85 +19,100 @@ const DynamicHistoryMap = dynamic(
   () => import("@/components/history-map").then((mod) => mod.HistoryMap),
   {
     ssr: false,
-    loading: () => (
-      <div className={styles.emptyState}>
-        <div>
-          <p className={styles.stateTitle}>Loading live map</p>
-          <p>Preparing route tiles and location markers.</p>
-        </div>
-      </div>
-    ),
+    loading: () => <div className={styles.mapLoading}>Menyiapkan peta...</div>,
   },
 );
 
+type TrackingMode = "live" | "live-route" | "history" | "route";
+
 type LiveTrackingViewerProps = {
   dataset: GpsHistoryDataset;
+  mode: TrackingMode;
+  startDate?: string;
+  endDate?: string;
+  rangeError?: string;
 };
 
 const LIVE_POLL_INTERVAL_MS = 10_000;
-const SHEET_DRAG_THRESHOLD_PX = 24;
+const TIMELINE_LIMIT = 40;
+const COLLAPSED_SHEET_HEIGHT = 214;
+const MAX_EXPANDED_SHEET_HEIGHT = 620;
+const SHEET_SWIPE_THRESHOLD = 32;
+const SHEET_SWIPE_VELOCITY = 0.35;
 
-function toInputDateTime(value: string) {
+type SheetDrag = {
+  pointerId: number;
+  startY: number;
+  startHeight: number;
+  lastY: number;
+  lastTime: number;
+  velocityY: number;
+};
+
+function formatTime(value: string, includeDate = false) {
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return "";
+    return value;
   }
 
-  const timezoneOffset = date.getTimezoneOffset() * 60_000;
-
-  return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16);
+  return new Intl.DateTimeFormat("id-ID", {
+    day: includeDate ? "numeric" : undefined,
+    month: includeDate ? "short" : undefined,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Jakarta",
+  }).format(date);
 }
 
-function formatShortDateTime(value: string) {
-  const date = new Date(value);
+function formatDateRange(startDate?: string, endDate?: string) {
+  if (!startDate || !endDate) {
+    return "Pilih rentang tanggal";
+  }
 
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat("en-GB", {
-        day: "2-digit",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-        timeZone: "Asia/Jakarta",
-      }).format(date);
-}
+  const formatter = new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  });
 
-function formatShortDateTimeWithSeconds(value: string) {
-  const date = new Date(value);
-
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat("en-GB", {
-        day: "2-digit",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-        timeZone: "Asia/Jakarta",
-      }).format(date);
+  return `${formatter.format(new Date(`${startDate}T12:00:00+07:00`))} - ${formatter.format(
+    new Date(`${endDate}T12:00:00+07:00`),
+  )}`;
 }
 
 function formatCoordinate(value: number) {
   return value.toFixed(6);
 }
 
-function formatDistance(points: GpsHistoryPoint[]) {
-  if (points.length < 2) {
-    return "0 km";
+function formatElapsedDuration(startAt: string, endAt: number) {
+  const startTime = Date.parse(startAt);
+
+  if (Number.isNaN(startTime)) {
+    return "-";
   }
 
-  let totalKm = 0;
+  const totalMinutes = Math.max(0, Math.floor((endAt - startTime) / 60_000));
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
 
-  for (let index = 1; index < points.length; index += 1) {
-    const previous = points[index - 1];
-    const current = points[index];
-    totalKm += haversineKm(previous, current);
+  if (days > 0) {
+    return `${days} hr ${hours} jam`;
   }
 
-  return `${totalKm.toFixed(2)} km`;
+  if (hours > 0) {
+    return `${hours} jam ${minutes} mnt`;
+  }
+
+  return `${minutes} mnt`;
+}
+
+function toRadians(value: number) {
+  return (value * Math.PI) / 180;
 }
 
 function haversineKm(left: GpsHistoryPoint, right: GpsHistoryPoint) {
@@ -97,7 +121,6 @@ function haversineKm(left: GpsHistoryPoint, right: GpsHistoryPoint) {
   const lonDelta = toRadians(right.longitude - left.longitude);
   const leftLat = toRadians(left.latitude);
   const rightLat = toRadians(right.latitude);
-
   const arc =
     Math.sin(latDelta / 2) ** 2 +
     Math.cos(leftLat) * Math.cos(rightLat) * Math.sin(lonDelta / 2) ** 2;
@@ -105,331 +128,338 @@ function haversineKm(left: GpsHistoryPoint, right: GpsHistoryPoint) {
   return 2 * earthRadiusKm * Math.atan2(Math.sqrt(arc), Math.sqrt(1 - arc));
 }
 
-function toRadians(value: number) {
-  return (value * Math.PI) / 180;
-}
+function calculateDistance(points: GpsHistoryPoint[]) {
+  let totalKm = 0;
 
-function parseRangeStart(value: string) {
-  return Date.parse(value);
-}
-
-function parseRangeEndInclusive(value: string) {
-  const parsed = Date.parse(value);
-
-  if (Number.isNaN(parsed)) {
-    return parsed;
+  for (let index = 1; index < points.length; index += 1) {
+    totalKm += haversineKm(points[index - 1], points[index]);
   }
 
-  // datetime-local is minute precision here, so include the whole minute.
-  return parsed + 59_999;
-}
-
-function buildRange(points: GpsHistoryPoint[], fallbackStartAt: string) {
-  if (points.length === 0) {
-    const normalizedFallback = toInputDateTime(fallbackStartAt);
-    return { start: normalizedFallback, end: normalizedFallback };
-  }
-
-  return {
-    start: toInputDateTime(points[0].serverReceivedAt || fallbackStartAt),
-    end: toInputDateTime(
-      points.at(-1)?.serverReceivedAt ?? points[0].serverReceivedAt ?? fallbackStartAt,
-    ),
-  };
+  return totalKm;
 }
 
 function getPointKey(point: GpsHistoryPoint) {
-  if (point.sourceId !== undefined && point.sourceId !== null) {
-    return `source:${String(point.sourceId)}`;
-  }
-
-  return [
-    point.gpsTimestamp,
-    point.serverReceivedAt,
-    point.latitude,
-    point.longitude,
-    point.speedKph,
-    point.course,
-    point.satelliteCount,
-  ].join("|");
+  return point.sourceId !== undefined
+    ? `source:${String(point.sourceId)}`
+    : `${point.serverReceivedAt}:${point.latitude}:${point.longitude}`;
 }
 
 function normalizePointIds(points: GpsHistoryPoint[]) {
-  return points.map((point, index) => ({
-    ...point,
-    id: index + 1,
-  }));
+  return points.map((point, index) => ({ ...point, id: index + 1 }));
 }
 
-export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
-  const isReady = dataset.status === "ready";
-  const hasFixedEndAt = Boolean(dataset.endAt);
-  const initialPoints = isReady ? normalizePointIds(dataset.points) : [];
-  const initialRange = buildRange(initialPoints, dataset.startAt);
+function getFreshness(value: string, now: number) {
+  const receivedAt = Date.parse(value);
 
-  const [points, setPoints] = useState<GpsHistoryPoint[]>(initialPoints);
-  const [startDateTime] = useState(initialRange.start);
-  const [endDateTime, setEndDateTime] = useState(initialRange.end);
+  if (Number.isNaN(receivedAt)) {
+    return {
+      isActive: false,
+      tone: "offline",
+      label: "Waktu tidak diketahui",
+    };
+  }
+
+  const ageSeconds = Math.max(0, Math.floor((now - receivedAt) / 1000));
+  const ageMinutes = Math.floor(ageSeconds / 60);
+  const isActive = ageSeconds < 5 * 60;
+
+  if (isActive) {
+    return { isActive, tone: "live", label: "Motor aktif" };
+  }
+
+  let elapsed = `${ageMinutes} mnt lalu`;
+
+  if (ageMinutes >= 24 * 60) {
+    elapsed = `${Math.floor(ageMinutes / (24 * 60))} hari lalu`;
+  } else if (ageMinutes >= 60) {
+    elapsed = `${Math.floor(ageMinutes / 60)} jam lalu`;
+  }
+
+  return {
+    isActive,
+    tone: "offline",
+    label: `Terakhir aktif ${elapsed}`,
+  };
+}
+
+function MapIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m9 18-6 3V6l6-3 6 3 6-3v15l-6 3-6-3Z" />
+      <path d="M9 3v15M15 6v15" />
+    </svg>
+  );
+}
+
+function HistoryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+      <path d="M3 3v5h5M12 7v5l3 2" />
+    </svg>
+  );
+}
+
+function HeartbeatMark() {
+  return (
+    <svg
+      aria-hidden="true"
+      className={styles.brandMark}
+      viewBox="0 0 32 32"
+      fill="none"
+    >
+      <path
+        d="M3 17h6l2.8-7 5.1 14L20 17h9"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function LiveTrackingViewer({
+  dataset,
+  mode,
+  startDate,
+  endDate,
+  rangeError,
+}: LiveTrackingViewerProps) {
+  const initialPoints = normalizePointIds(dataset.points);
+  const isLiveMode = mode === "live" || mode === "live-route";
+  const hasRouteDetails = mode !== "live";
+  const isHistoryDestination = mode === "history" || mode === "route";
+  const [points, setPoints] = useState(initialPoints);
   const [selectedPointId, setSelectedPointId] = useState<number | null>(
-    initialPoints.at(-1)?.id ?? null,
+    isLiveMode ? initialPoints.at(-1)?.id ?? null : null,
   );
   const [isSheetExpanded, setIsSheetExpanded] = useState(false);
-  const [isDraggingSheet, setIsDraggingSheet] = useState(false);
-  const [sheetDragOffset, setSheetDragOffset] = useState(0);
+  const [sheetDragHeight, setSheetDragHeight] = useState<number | null>(null);
+  const [isSheetDragging, setIsSheetDragging] = useState(false);
+  const sheetDragRef = useRef<SheetDrag | null>(null);
+  const sheetDragCleanupRef = useRef<(() => void) | null>(null);
+  const didDragSheetRef = useRef(false);
   const [pollError, setPollError] = useState<string | null>(null);
-  const [lastRefreshAt, setLastRefreshAt] = useState(
-    isReady ? dataset.latestServerReceivedAt : dataset.startAt,
-  );
-
+  const [now, setNow] = useState(() => Date.now());
+  const latestTimestampRef = useRef(dataset.latestServerReceivedAt);
   const nextIdRef = useRef(initialPoints.length);
-  const latestTimestampRef = useRef(lastRefreshAt);
-  const selectedPointIdRef = useRef<number | null>(selectedPointId);
-  const followEndRef = useRef(true);
-  const dragStartYRef = useRef<number | null>(null);
-  const suppressNextClickRef = useRef(false);
 
   useEffect(() => {
-    latestTimestampRef.current = lastRefreshAt;
-  }, [lastRefreshAt]);
+    return () => sheetDragCleanupRef.current?.();
+  }, []);
 
   useEffect(() => {
-    selectedPointIdRef.current = selectedPointId;
-  }, [selectedPointId]);
-
-  const isInvalidRange =
-    startDateTime !== "" &&
-    endDateTime !== "" &&
-    parseRangeStart(startDateTime) > parseRangeEndInclusive(endDateTime);
-
-  const filteredPoints = useMemo(() => {
-    if (isInvalidRange) {
-      return [];
-    }
-
-    const parsedStart = startDateTime === "" ? null : parseRangeStart(startDateTime);
-    const parsedEnd = endDateTime === "" ? null : parseRangeEndInclusive(endDateTime);
-
-    return points.filter((point) => {
-      const timestamp = Date.parse(point.serverReceivedAt);
-      const startsAfter =
-        parsedStart === null || timestamp >= parsedStart;
-      const endsBefore = parsedEnd === null || timestamp <= parsedEnd;
-
-      return startsAfter && endsBefore;
-    });
-  }, [endDateTime, isInvalidRange, points, startDateTime]);
-
-  const mapPoints = filteredPoints;
-
-  const activeSelectedPointId = mapPoints.some(
-    (point) => point.id === selectedPointId,
-  )
-    ? selectedPointId
-    : mapPoints.at(-1)?.id ?? null;
-  const peakSpeed =
-    mapPoints.length === 0
-      ? "0 km/h"
-      : `${Math.max(...mapPoints.map((point) => point.speedKph))} km/h`;
-  const startPoint = mapPoints[0] ?? null;
-  const endPoint = mapPoints.at(-1) ?? null;
-  const liveStatus = `${points.length} points live`;
+    const clock = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(clock);
+  }, []);
 
   useEffect(() => {
-    if (!isReady || hasFixedEndAt) {
+    if (!isLiveMode || dataset.status !== "ready") {
       return;
     }
 
-    let isMounted = true;
-    let isRequestInFlight = false;
-
-    const applyLatestCursor = (cursor: string) => {
-      latestTimestampRef.current = cursor;
-      setLastRefreshAt(cursor);
-
-      if (followEndRef.current) {
-        setEndDateTime(toInputDateTime(cursor));
-      }
-    };
-
-    const appendFreshPoints = (incomingPoints: GpsHistoryPoint[]) => {
-      setPoints((currentPoints) => {
-        const currentKeys = new Set(currentPoints.map(getPointKey));
-        const currentLastPointId = currentPoints.at(-1)?.id ?? null;
-        let nextId = nextIdRef.current;
-        const mergedPoints = [...currentPoints];
-        let appendedCount = 0;
-
-        for (const point of incomingPoints) {
-          const pointKey = getPointKey(point);
-
-          if (currentKeys.has(pointKey)) {
-            continue;
-          }
-
-          nextId += 1;
-          currentKeys.add(pointKey);
-          mergedPoints.push({
-            ...point,
-            id: nextId,
-          });
-          appendedCount += 1;
-        }
-
-        nextIdRef.current = nextId;
-
-        if (appendedCount > 0) {
-          const latestPoint = mergedPoints.at(-1);
-          if (latestPoint) {
-            if (
-              selectedPointIdRef.current === null ||
-              selectedPointIdRef.current === currentLastPointId
-            ) {
-              setSelectedPointId(latestPoint.id);
-            }
-          }
-        }
-
-        return mergedPoints;
-      });
-    };
+    let mounted = true;
+    let requestInFlight = false;
 
     const refresh = async () => {
-      if (isRequestInFlight) {
+      if (requestInFlight) {
         return;
       }
 
-      isRequestInFlight = true;
+      requestInFlight = true;
 
       try {
         const response = await fetch(
-          `/api/gps-history?imei=${encodeURIComponent(dataset.imei)}&start_at=${encodeURIComponent(latestTimestampRef.current)}`,
-          {
-            cache: "no-store",
-          },
+          `/api/gps-history?imei=${encodeURIComponent(dataset.imei)}&start_at=${encodeURIComponent(
+            latestTimestampRef.current,
+          )}`,
+          { cache: "no-store" },
         );
 
         if (!response.ok) {
-          throw new Error(`Live refresh failed with status ${response.status}.`);
+          throw new Error("Pembaruan lokasi gagal.");
         }
 
         const payload: GpsHistoryDataset = await response.json();
 
-        if (!isMounted) {
+        if (!mounted || payload.status === "error") {
+          if (mounted && payload.status === "error") {
+            setPollError(payload.message);
+          }
           return;
         }
 
-        if (payload.status === "error") {
-          setPollError(payload.message);
-          return;
-        }
-
+        latestTimestampRef.current =
+          payload.latestServerReceivedAt || latestTimestampRef.current;
         setPollError(null);
-        applyLatestCursor(payload.latestServerReceivedAt || latestTimestampRef.current);
 
-        if (payload.points.length === 0) {
-          return;
-        }
+        setPoints((current) => {
+          const keys = new Set(current.map(getPointKey));
+          const merged = [...current];
 
-        appendFreshPoints(payload.points.map((point, index) => ({
-          ...point,
-          id: index + 1,
-        })));
+          for (const point of payload.points) {
+            if (keys.has(getPointKey(point))) {
+              continue;
+            }
+
+            nextIdRef.current += 1;
+            keys.add(getPointKey(point));
+            merged.push({ ...point, id: nextIdRef.current });
+          }
+
+          const latest = merged.at(-1);
+          if (latest) {
+            setSelectedPointId(latest.id);
+          }
+          return merged;
+        });
       } catch (error) {
-        if (isMounted) {
+        if (mounted) {
           setPollError(
-            error instanceof Error ? error.message : "Failed to refresh live data.",
+            error instanceof Error ? error.message : "Pembaruan lokasi gagal.",
           );
         }
       } finally {
-        isRequestInFlight = false;
+        requestInFlight = false;
       }
     };
 
-    const intervalId = window.setInterval(refresh, LIVE_POLL_INTERVAL_MS);
-
+    const interval = window.setInterval(refresh, LIVE_POLL_INTERVAL_MS);
     return () => {
-      isMounted = false;
-      window.clearInterval(intervalId);
+      mounted = false;
+      window.clearInterval(interval);
     };
-  }, [dataset.imei, dataset.startAt, hasFixedEndAt, isReady]);
+  }, [dataset.imei, dataset.status, isLiveMode]);
 
-  if (!isReady && dataset.points.length === 0) {
-    return (
-      <main className={styles.page}>
-        <section className={styles.errorState}>
-          <div>
-            <p className={styles.stateTitle}>Dataset failed to load</p>
-            <p>{dataset.message}</p>
-          </div>
-        </section>
-      </main>
-    );
-  }
+  const latestPoint = points.at(-1) ?? null;
+  const peakSpeed =
+    points.length > 0 ? Math.max(...points.map((point) => point.speedKph)) : 0;
+  const distance = calculateDistance(points);
+  const elapsedTracking = formatElapsedDuration(dataset.startAt, now);
+  const freshness = getFreshness(
+    latestPoint?.serverReceivedAt ?? dataset.latestServerReceivedAt,
+    now,
+  );
+  const mapPoints =
+    mode === "live" ? (latestPoint ? [latestPoint] : []) : points;
+  const timelinePoints = points.slice(-TIMELINE_LIMIT).reverse();
+  const historyHref = `/live-tracking/${encodeURIComponent(dataset.imei)}/history`;
+  const liveHref = `/live-tracking/${encodeURIComponent(dataset.imei)}`;
+  const hasError = dataset.status === "error";
+  const datasetError =
+    dataset.status === "error"
+      ? "Lokasi belum bisa dimuat. Periksa koneksi lalu buka kembali halaman ini."
+      : null;
 
-  if (isInvalidRange) {
-    return (
-      <main className={styles.page}>
-        <section className={styles.errorState}>
-          <div>
-            <p className={styles.stateTitle}>Invalid date range</p>
-            <p>Start time must be earlier than or equal to the end time.</p>
-          </div>
-        </section>
-      </main>
-    );
-  }
+  const getExpandedSheetHeight = () =>
+    Math.min(window.innerHeight * 0.68, MAX_EXPANDED_SHEET_HEIGHT);
 
-  if (filteredPoints.length === 0) {
-    return (
-      <main className={styles.page}>
-        <section className={styles.emptyState}>
-          <div>
-            <p className={styles.stateTitle}>No matching history</p>
-            <p>Try widening the selected time range for this device.</p>
-          </div>
-        </section>
-      </main>
-    );
-  }
-
-  const onSheetPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
-    dragStartYRef.current = event.clientY;
-    setIsDraggingSheet(true);
-    setSheetDragOffset(0);
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-
-  const onSheetPointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (dragStartYRef.current === null) {
+  const handleSheetPointerDown = (
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) => {
+    if (!hasRouteDetails || event.button !== 0) {
       return;
     }
 
-    const delta = event.clientY - dragStartYRef.current;
-    const clampedDelta = Math.max(-220, Math.min(220, delta));
-    setSheetDragOffset(clampedDelta);
+    event.preventDefault();
+    sheetDragCleanupRef.current?.();
+    const now = performance.now();
+    const startHeight = isSheetExpanded
+      ? getExpandedSheetHeight()
+      : COLLAPSED_SHEET_HEIGHT;
+
+    sheetDragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startHeight,
+      lastY: event.clientY,
+      lastTime: now,
+      velocityY: 0,
+    };
+    didDragSheetRef.current = false;
+    setSheetDragHeight(startHeight);
+    setIsSheetDragging(true);
+
+    const moveSheet = (moveEvent: PointerEvent) => {
+      const drag = sheetDragRef.current;
+
+      if (!drag || drag.pointerId !== moveEvent.pointerId) {
+        return;
+      }
+
+      moveEvent.preventDefault();
+      const moveTime = performance.now();
+      const elapsed = Math.max(moveTime - drag.lastTime, 1);
+      const deltaY = moveEvent.clientY - drag.startY;
+      const expandedHeight = getExpandedSheetHeight();
+      const nextHeight = Math.min(
+        expandedHeight,
+        Math.max(COLLAPSED_SHEET_HEIGHT, drag.startHeight - deltaY),
+      );
+
+      drag.velocityY = (moveEvent.clientY - drag.lastY) / elapsed;
+      drag.lastY = moveEvent.clientY;
+      drag.lastTime = moveTime;
+      didDragSheetRef.current =
+        didDragSheetRef.current || Math.abs(deltaY) > 8;
+      setSheetDragHeight(nextHeight);
+    };
+
+    const finishSheet = (finishEvent: PointerEvent) => {
+      const drag = sheetDragRef.current;
+
+      if (!drag || drag.pointerId !== finishEvent.pointerId) {
+        return;
+      }
+
+      const deltaY = finishEvent.clientY - drag.startY;
+      const movedFarEnough = Math.abs(deltaY) >= SHEET_SWIPE_THRESHOLD;
+      const movedFastEnough =
+        Math.abs(drag.velocityY) >= SHEET_SWIPE_VELOCITY;
+      const didDrag =
+        didDragSheetRef.current || movedFarEnough || movedFastEnough;
+
+      if (didDrag) {
+        const currentHeight = Math.min(
+          getExpandedSheetHeight(),
+          Math.max(
+            COLLAPSED_SHEET_HEIGHT,
+            drag.startHeight - deltaY,
+          ),
+        );
+        const shouldExpand = movedFastEnough
+          ? drag.velocityY < 0
+          : movedFarEnough
+            ? deltaY < 0
+            : currentHeight >
+              (COLLAPSED_SHEET_HEIGHT + getExpandedSheetHeight()) / 2;
+        setIsSheetExpanded(shouldExpand);
+      }
+
+      didDragSheetRef.current = didDrag;
+      sheetDragRef.current = null;
+      sheetDragCleanupRef.current?.();
+      setSheetDragHeight(null);
+      setIsSheetDragging(false);
+    };
+
+    const cleanup = () => {
+      window.removeEventListener("pointermove", moveSheet);
+      window.removeEventListener("pointerup", finishSheet);
+      window.removeEventListener("pointercancel", finishSheet);
+      sheetDragCleanupRef.current = null;
+    };
+
+    sheetDragCleanupRef.current = cleanup;
+    window.addEventListener("pointermove", moveSheet, { passive: false });
+    window.addEventListener("pointerup", finishSheet);
+    window.addEventListener("pointercancel", finishSheet);
   };
 
-  const onSheetPointerUp = () => {
-    if (dragStartYRef.current === null) {
-      return;
-    }
-
-    const delta = sheetDragOffset;
-    const movedEnough = Math.abs(delta) >= SHEET_DRAG_THRESHOLD_PX;
-
-    if (movedEnough) {
-      suppressNextClickRef.current = true;
-      setIsSheetExpanded(delta < 0);
-    }
-
-    dragStartYRef.current = null;
-    setIsDraggingSheet(false);
-    setSheetDragOffset(0);
-  };
-
-  const onSheetClick = () => {
-    if (suppressNextClickRef.current) {
-      suppressNextClickRef.current = false;
+  const handleSheetClick = () => {
+    if (didDragSheetRef.current) {
+      didDragSheetRef.current = false;
       return;
     }
 
@@ -437,129 +467,280 @@ export function LiveTrackingViewer({ dataset }: LiveTrackingViewerProps) {
   };
 
   return (
-    <main className={styles.page}>
-      <section className={styles.mapShell}>
-        <section className={styles.mapPane}>
-          <div className={styles.liveBadge}>Live tracking</div>
+    <main className={styles.viewport}>
+      <section className={styles.appCanvas}>
+        <header className={styles.topBar}>
+          <HeartbeatMark />
+          <div className={styles.vehicleIdentity}>
+            <strong>Motor Saya</strong>
+            <span>IMEI {dataset.imei}</span>
+          </div>
+          <div
+            className={`${styles.freshness} ${
+              mode === "route" ? styles.routeTone : styles[freshness.tone]
+            }`}
+          >
+            <span />
+            {mode === "route"
+              ? "Rute perjalanan"
+              : mode === "live-route" && freshness.isActive
+                ? "Melacak langsung"
+                : freshness.label}
+          </div>
+        </header>
+
+        {mode === "history" ? (
+          <form className={styles.datePanel} method="get">
+            <div className={styles.datePanelHeading}>
+              <div>
+                <strong>Riwayat perjalanan</strong>
+                <span>{formatDateRange(startDate, endDate)}</span>
+              </div>
+              <button type="submit">Tampilkan</button>
+            </div>
+            <div className={styles.dateFields}>
+              <label>
+                <span>Dari</span>
+                <input
+                  type="date"
+                  name="start_date"
+                  defaultValue={startDate}
+                  required
+                />
+              </label>
+              <label>
+                <span>Sampai</span>
+                <input
+                  type="date"
+                  name="end_date"
+                  defaultValue={endDate}
+                  required
+                />
+              </label>
+            </div>
+            {rangeError ? <p className={styles.fieldError}>{rangeError}</p> : null}
+          </form>
+        ) : null}
+
+        <section className={styles.mapRegion} aria-label="Peta lokasi motor">
           <DynamicHistoryMap
+            key={mode}
+            mode={mode}
             points={mapPoints}
-            selectedPointId={activeSelectedPointId}
+            selectedPointId={selectedPointId}
             onSelectPoint={setSelectedPointId}
             isSheetExpanded={isSheetExpanded}
+            latestIsActive={freshness.isActive}
           />
 
-          {dataset.status === "error" ? (
-            <section className={`${styles.overlayCard} ${styles.warningBanner}`}>
-              <p className={styles.warningTitle}>Dataset warning</p>
-              <p>{dataset.message}</p>
-            </section>
-          ) : null}
+          {(hasError || pollError) && (
+            <div
+              className={`${styles.warning} ${
+                mode === "history" ? styles.warningHistory : ""
+              }`}
+              role="status"
+            >
+              <strong>Data belum dapat diperbarui</strong>
+              <span>{pollError ?? datasetError}</span>
+            </div>
+          )}
 
-          {pollError ? (
-            <section className={`${styles.overlayCard} ${styles.warningBanner}`}>
-              <p className={styles.warningTitle}>Live refresh warning</p>
-              <p>{pollError}</p>
-            </section>
+          {points.length === 0 && !hasError ? (
+            <div className={styles.emptyMap}>
+              <strong>Belum ada titik lokasi</strong>
+              <span>
+                {mode === "live"
+                  ? "Lokasi hari ini akan muncul saat perangkat mengirim data."
+                  : mode === "live-route"
+                    ? "Belum ada lokasi sejak waktu mulai. Halaman akan memperbarui data secara otomatis."
+                  : "Coba pilih rentang tanggal lain."}
+              </span>
+            </div>
           ) : null}
         </section>
 
         <section
           className={`${styles.bottomSheet} ${
-            isSheetExpanded ? styles.sheetExpanded : styles.sheetCollapsed
-          } ${isDraggingSheet ? styles.sheetDragging : ""}`}
-          style={{ transform: `translateY(${sheetDragOffset}px)` }}
+            !hasRouteDetails
+              ? styles.liveSheet
+              : isSheetExpanded
+                ? styles.sheetExpanded
+                : styles.sheetCollapsed
+          } ${isSheetDragging ? styles.sheetDragging : ""}`}
+          style={
+            hasRouteDetails && sheetDragHeight !== null
+              ? { height: `${sheetDragHeight}px` }
+              : undefined
+          }
         >
-          <button
-            type="button"
-            className={styles.sheetHandle}
-            onPointerDown={onSheetPointerDown}
-            onPointerMove={onSheetPointerMove}
-            onPointerUp={onSheetPointerUp}
-            onPointerCancel={onSheetPointerUp}
-            onClick={onSheetClick}
-            aria-expanded={isSheetExpanded}
-          >
-            <span className={styles.sheetGrip} />
-            <span className={styles.sheetTitle}>Live route details</span>
-            <span className={styles.sheetAction}>
-              {isSheetExpanded ? "Collapse" : "Expand"}
-            </span>
-          </button>
-
-          <div className={styles.sheetContent}>
-            <div className={styles.statsRow}>
-              <article className={styles.statCard}>
-                <span>Distance</span>
-                <strong>{formatDistance(mapPoints)}</strong>
-              </article>
-              <article className={styles.statCard}>
-                <span>Peak speed</span>
-                <strong>{peakSpeed}</strong>
-              </article>
-              <article className={styles.statCard}>
-                <span>{liveStatus}</span>
-                <strong>{mapPoints.length} shown on map</strong>
-              </article>
+          {hasRouteDetails ? (
+            <button
+              type="button"
+              className={styles.sheetHandle}
+              onClick={handleSheetClick}
+              onPointerDown={handleSheetPointerDown}
+              aria-expanded={isSheetExpanded}
+            >
+              <span className={styles.sheetGrip} />
+              <span className={styles.srOnly}>
+                {isSheetExpanded
+                  ? "Tutup detail perjalanan"
+                  : "Buka detail perjalanan"}
+              </span>
+            </button>
+          ) : (
+            <div className={styles.sheetHandle} aria-hidden="true">
+              <span className={styles.sheetGrip} />
             </div>
+          )}
 
-            <div className={styles.detailStack}>
-              <div className={styles.routeSummary}>
-                <article className={styles.infoCard}>
-                  <span className={styles.infoLabel}>Start</span>
-                  <strong className={styles.infoValue}>
-                    {startPoint ? formatShortDateTime(startPoint.serverReceivedAt) : "Unavailable"}
-                  </strong>
-                </article>
-                <article className={styles.infoCard}>
-                  <span className={styles.infoLabel}>Latest</span>
-                  <strong className={styles.infoValue}>
-                    {endPoint ? formatShortDateTime(endPoint.serverReceivedAt) : "Unavailable"}
-                  </strong>
-                </article>
+          <div className={styles.sheetScroll}>
+            <div className={styles.sheetHeading}>
+              <div>
+                <span>
+                  {mode === "live"
+                    ? freshness.isActive
+                      ? "Motor aktif"
+                      : "Posisi terakhir"
+                    : mode === "live-route"
+                      ? `Tracking sejak ${formatTime(dataset.startAt, true)}`
+                    : "Ringkasan rute"}
+                </span>
+                <h1>
+                  {latestPoint
+                    ? isLiveMode
+                      ? `Diterima ${formatTime(latestPoint.serverReceivedAt, true)}`
+                      : formatTime(latestPoint.serverReceivedAt, true)
+                    : "Belum tersedia"}
+                </h1>
               </div>
-
-              <section className={styles.timelinePanel}>
-                <div className={styles.sectionHeader}>
-                  <h2>Timeline</h2>
-                  <span>Tap a row to focus the map</span>
-                </div>
-
-                <div className={styles.timelineList}>
-                  {filteredPoints.map((point) => {
-                    const itemClassName =
-                      point.id === activeSelectedPointId
-                        ? `${styles.timelineItem} ${styles.timelineItemSelected}`
-                        : styles.timelineItem;
-
-                    return (
-                      <button
-                        type="button"
-                        key={point.id}
-                        className={itemClassName}
-                        onClick={() => setSelectedPointId(point.id)}
-                      >
-                        <div className={styles.timelineMain}>
-                          <strong>
-                            {formatShortDateTimeWithSeconds(point.serverReceivedAt)}
-                          </strong>
-                          <span>{point.speedKph} km/h</span>
-                        </div>
-                        <div className={styles.timelineMeta}>
-                          <span>
-                            {formatCoordinate(point.latitude)}, {formatCoordinate(point.longitude)}
-                          </span>
-                          <span>
-                            {point.satelliteCount} sats • {point.course}&deg;
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
+              <div className={styles.speedMetric}>
+                <strong>{Math.round(latestPoint?.speedKph ?? 0)}</strong>
+                <span>km/j</span>
+              </div>
             </div>
+
+            {hasRouteDetails ? (
+              <div className={styles.metrics}>
+                <div>
+                  <span>Jarak</span>
+                  <strong>{distance.toFixed(2)} km</strong>
+                </div>
+                <div>
+                  <span>Kecepatan tertinggi</span>
+                  <strong>{Math.round(peakSpeed)} km/j</strong>
+                </div>
+                <div>
+                  <span>{mode === "live-route" ? "Durasi" : "Titik GPS"}</span>
+                  <strong>
+                    {mode === "live-route" ? elapsedTracking : points.length}
+                  </strong>
+                </div>
+              </div>
+            ) : (
+              <div className={styles.metrics}>
+                <div>
+                  <span>Kecepatan</span>
+                  <strong>{Math.round(latestPoint?.speedKph ?? 0)} km/j</strong>
+                </div>
+                <div>
+                  <span>Sinyal GPS</span>
+                  <strong>
+                    {latestPoint ? `${latestPoint.satelliteCount} satelit` : "-"}
+                  </strong>
+                </div>
+                <div>
+                  <span>Arah</span>
+                  <strong>{latestPoint ? `${Math.round(latestPoint.course)}°` : "-"}</strong>
+                </div>
+              </div>
+            )}
+
+            <div className={styles.latestDetails}>
+              <div>
+                <span>Koordinat</span>
+                <strong>
+                  {latestPoint
+                    ? `${formatCoordinate(latestPoint.latitude)}, ${formatCoordinate(
+                        latestPoint.longitude,
+                      )}`
+                    : "-"}
+                </strong>
+              </div>
+              <div>
+                <span>{!hasRouteDetails ? "Status" : "Sinyal GPS"}</span>
+                <strong>
+                  {!hasRouteDetails
+                    ? latestPoint
+                      ? freshness.isActive
+                        ? "Motor aktif"
+                        : "Tidak aktif"
+                      : "-"
+                    : latestPoint
+                      ? `${latestPoint.satelliteCount} satelit`
+                      : "-"}
+                </strong>
+              </div>
+            </div>
+
+            {hasRouteDetails ? <section className={styles.timeline}>
+              <div className={styles.timelineHeading}>
+                <h2>Catatan perjalanan</h2>
+                <span>{Math.min(points.length, TIMELINE_LIMIT)} titik terbaru</span>
+              </div>
+              {timelinePoints.length === 0 ? (
+                <p className={styles.timelineEmpty}>Belum ada data perjalanan.</p>
+              ) : (
+                <div className={styles.timelineList}>
+                  {timelinePoints.map((point) => (
+                    <button
+                      type="button"
+                      key={point.id}
+                      className={
+                        point.id === selectedPointId
+                          ? `${styles.timelineItem} ${styles.timelineItemSelected}`
+                          : styles.timelineItem
+                      }
+                      onClick={() => setSelectedPointId(point.id)}
+                    >
+                      <span className={styles.timelineDot} />
+                      <span className={styles.timelineContent}>
+                        <strong>{formatTime(point.serverReceivedAt, true)}</strong>
+                        <span>
+                          {formatCoordinate(point.latitude)},{" "}
+                          {formatCoordinate(point.longitude)}
+                        </span>
+                      </span>
+                      <span className={styles.timelineReading}>
+                        <strong>{Math.round(point.speedKph)} km/j</strong>
+                        <span>{point.satelliteCount} satelit</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section> : null}
           </div>
         </section>
+
+        <nav className={styles.bottomNav} aria-label="Navigasi pelacakan">
+          <Link
+            href={liveHref}
+            className={isLiveMode ? styles.navActive : undefined}
+            aria-current={isLiveMode ? "page" : undefined}
+          >
+            <MapIcon />
+            <span>Live</span>
+          </Link>
+          <Link
+            href={historyHref}
+            className={isHistoryDestination ? styles.navActive : undefined}
+            aria-current={isHistoryDestination ? "page" : undefined}
+          >
+            <HistoryIcon />
+            <span>Riwayat</span>
+          </Link>
+        </nav>
       </section>
     </main>
   );
