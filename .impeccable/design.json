@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-27T08:08:38Z",
+  "title": "Design System: Heartbeats Calm Roadbook",
+  "extensions": {
+    "colorMeta": {
+      "route-orange": {
+        "role": "primary",
+        "displayName": "Route Orange",
+        "canonical": "#E4512B",
+        "tonalRamp": ["#4A170E", "#762315", "#A1321D", "#E4512B", "#EA795D", "#F0A18C", "#F7C9BC", "#FDF0EB"]
+      },
+      "warm-canvas": {
+        "role": "neutral",
+        "displayName": "Warm Canvas",
+        "canonical": "#F4F1EA",
+        "tonalRamp": ["#24231F", "#48453E", "#6D685E", "#928C7F", "#B6B0A2", "#D5D0C5", "#E8E4DC", "#F4F1EA"]
+      },
+      "paper-surface": {
+        "role": "neutral",
+        "displayName": "Paper Surface",
+        "canonical": "#FFFDF8",
+        "tonalRamp": ["#282621", "#4F4B42", "#777165", "#9F9788", "#C5BDAE", "#E2DCD1", "#F2EEE7", "#FFFDF8"]
+      },
+      "charcoal-ink": {
+        "role": "neutral",
+        "displayName": "Charcoal Ink",
+        "canonical": "#20231F",
+        "tonalRamp": ["#20231F", "#353A34", "#51584F", "#70796E", "#929B90", "#B7BDB4", "#DADDD7", "#F0F2EE"]
+      },
+      "live-green": {
+        "role": "semantic",
+        "displayName": "Live Green",
+        "canonical": "#168B52",
+        "tonalRamp": ["#07331F", "#0B5330", "#107341", "#168B52", "#3BA36B", "#72BE94", "#B0DAC4", "#E8F4ED"]
+      },
+      "alert-red": {
+        "role": "semantic",
+        "displayName": "Alert Red",
+        "canonical": "#C83E32",
+        "tonalRamp": ["#40110D", "#6A1D17", "#952A22", "#C83E32", "#D9685F", "#E4948E", "#F0C1BD", "#FAECEA"]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Screen identity and important vehicle state."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Controls, timeline content, and customer-facing UI copy."
+      },
+      "metric": {
+        "displayName": "Metric",
+        "purpose": "Speed, distance, peak speed, and route point counts."
+      }
+    },
+    "shadows": [
+      {
+        "name": "map-float",
+        "value": "0 8px 24px rgba(32, 35, 31, 0.14)",
+        "purpose": "Separates floating map controls and status from changing map content."
+      },
+      {
+        "name": "sheet-ambient",
+        "value": "0 -8px 28px rgba(32, 35, 31, 0.10)",
+        "purpose": "Provides subtle separation between the map and draggable sheet."
+      }
+    ],
+    "motion": [
+      {
+        "name": "press",
+        "value": "140ms cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "Immediate control feedback."
+      },
+      {
+        "name": "sheet-spring",
+        "value": "response 0.3s, damping 0.8",
+        "purpose": "Interruptible bottom-sheet settling after direct manipulation."
+      },
+      {
+        "name": "map-focus",
+        "value": "320ms cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "Camera adjustment when a route point is selected."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "mobile-canvas-max",
+        "value": "480px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single prominent action within a task.",
+      "html": "<button class=\"ds-button-primary\">Tampilkan rute</button>",
+      "css": ".ds-button-primary { min-height: 48px; padding: 12px 16px; border: 0; border-radius: 10px; color: #FFFDF8; background: #E4512B; font: 600 15px/1.2 Barlow, sans-serif; transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), background-color 140ms ease; } .ds-button-primary:hover { background: #B73A20; } .ds-button-primary:active { transform: scale(0.98); } .ds-button-primary:focus-visible { outline: 3px solid #20231F; outline-offset: 2px; }"
+    },
+    {
+      "name": "Date Field",
+      "kind": "input",
+      "refersTo": "date-field",
+      "description": "A readable native date control for History ranges.",
+      "html": "<label class=\"ds-date\"><span>Mulai</span><input type=\"date\" value=\"2026-07-26\"></label>",
+      "css": ".ds-date { display: grid; gap: 4px; color: #6B6E68; font: 500 12px/1.3 Barlow, sans-serif; } .ds-date input { min-height: 48px; padding: 0 12px; border: 1px solid #DDD8CE; border-radius: 10px; color: #20231F; background: #FFFDF8; font: 500 15px/1.2 Barlow, sans-serif; } .ds-date input:focus-visible { outline: 3px solid rgba(228, 81, 43, 0.28); border-color: #E4512B; }"
+    },
+    {
+      "name": "Bottom Navigation",
+      "kind": "nav",
+      "description": "Stable two-destination navigation for Live and History.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-active\" href=\"#\">Live</a><a href=\"#\">Riwayat</a></nav>",
+      "css": ".ds-nav { display: grid; grid-template-columns: 1fr 1fr; min-height: 64px; padding: 8px 16px; background: #FFFDF8; border-top: 1px solid #DDD8CE; font: 500 13px/1.2 Barlow, sans-serif; } .ds-nav a { display: grid; place-items: center; min-height: 48px; color: #6B6E68; text-decoration: none; border-radius: 10px; } .ds-nav a:focus-visible { outline: 3px solid rgba(228, 81, 43, 0.28); } .ds-nav .ds-nav-active { color: #E4512B; font-weight: 600; }"
+    },
+    {
+      "name": "Metric Group",
+      "kind": "card",
+      "description": "Grouped route metrics separated by quiet dividers rather than individual cards.",
+      "html": "<section class=\"ds-metrics\"><div><strong>18,4</strong><span>km</span></div><div><strong>67</strong><span>km/h</span></div><div><strong>126</strong><span>titik</span></div></section>",
+      "css": ".ds-metrics { display: grid; grid-template-columns: repeat(3, 1fr); padding: 12px 0; color: #20231F; background: #FFFDF8; } .ds-metrics div { display: grid; justify-items: center; gap: 4px; border-left: 1px solid #DDD8CE; } .ds-metrics div:first-child { border-left: 0; } .ds-metrics strong { font: 650 32px/1 Barlow Semi Condensed, Barlow, sans-serif; font-variant-numeric: tabular-nums; } .ds-metrics span { color: #6B6E68; font: 500 12px/1.3 Barlow, sans-serif; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Calm Roadbook",
+    "overview": "Heartbeats combines the interaction clarity of a modern map utility with the warmth and specificity of a rider's roadbook. The map remains the dominant working surface, while warm paper neutrals, route-orange wayfinding, and journey-log structure give the product a recognizable motorcycle identity without retro costume.",
+    "keyCharacteristics": [
+      "Map-first and immediately understandable.",
+      "Warm, restrained surfaces with one route-orange accent.",
+      "Clear location freshness and semantic safety states.",
+      "Large readable metrics and compact journey-log details.",
+      "Mobile composition preserved on every viewport."
+    ],
+    "rules": [
+      {
+        "name": "The Route Is Orange Rule",
+        "body": "Orange communicates movement, selection, or an intentional customer action. It is not a decorative fill for large surfaces.",
+        "section": "colors"
+      },
+      {
+        "name": "The Read It Outdoors Rule",
+        "body": "No essential customer-facing text renders below 12px. Map overlays and metadata use sufficient weight and contrast for daylight use.",
+        "section": "typography"
+      },
+      {
+        "name": "The Map Context Rule",
+        "body": "Any floating surface must preserve enough map context to understand the vehicle or route position.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep the map and selected location visible while details expand.",
+      "Do show exact freshness information instead of an unexplained green dot.",
+      "Do use complete WIB calendar-day boundaries for History date ranges.",
+      "Do preserve readable text, touch targets, and legal map attribution.",
+      "Do use warm roadbook details sparingly to make Heartbeats recognizable."
+    ],
+    "donts": [
+      "Don't recreate a desktop dashboard inside a narrow viewport.",
+      "Don't use fake license plates, distressed paper, or retro ornament as core UI.",
+      "Don't load or render all historical GPS points by default.",
+      "Don't expose IMEI-based location access without customer authorization.",
+      "Don't use gradients, generic glassmorphism, dark-only presentation, or multiple competing accent colors."
+    ]
+  }
+}
