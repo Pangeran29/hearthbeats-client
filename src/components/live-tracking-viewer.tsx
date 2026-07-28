@@ -12,7 +12,12 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import type { GpsHistoryDataset, GpsHistoryPoint } from "@/types/gps";
+import type {
+  GpsHistoryDataset,
+  GpsHistoryPoint,
+  TrackingSession,
+  TrackingSessionsDataset,
+} from "@/types/gps";
 import styles from "./gps-history-viewer.module.css";
 
 const DynamicHistoryMap = dynamic(
@@ -28,9 +33,11 @@ type TrackingMode = "live" | "live-route" | "history" | "route";
 type LiveTrackingViewerProps = {
   dataset: GpsHistoryDataset;
   mode: TrackingMode;
-  startDate?: string;
-  endDate?: string;
-  rangeError?: string;
+  historyDate?: string;
+  sessionsDataset?: TrackingSessionsDataset;
+  selectedSession?: TrackingSession;
+  dateError?: string;
+  sessionSelectionError?: string;
 };
 
 const LIVE_POLL_INTERVAL_MS = 10_000;
@@ -67,9 +74,9 @@ function formatTime(value: string, includeDate = false) {
   }).format(date);
 }
 
-function formatDateRange(startDate?: string, endDate?: string) {
-  if (!startDate || !endDate) {
-    return "Pilih rentang tanggal";
+function formatCalendarDate(value?: string) {
+  if (!value) {
+    return "Pilih tanggal";
   }
 
   const formatter = new Intl.DateTimeFormat("id-ID", {
@@ -79,9 +86,28 @@ function formatDateRange(startDate?: string, endDate?: string) {
     timeZone: "Asia/Jakarta",
   });
 
-  return `${formatter.format(new Date(`${startDate}T12:00:00+07:00`))} - ${formatter.format(
-    new Date(`${endDate}T12:00:00+07:00`),
-  )}`;
+  return formatter.format(new Date(`${value}T12:00:00+07:00`));
+}
+
+function formatClock(value: string) {
+  return new Intl.DateTimeFormat("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Jakarta",
+  }).format(new Date(value));
+}
+
+function formatDurationSeconds(value: number) {
+  const totalMinutes = Math.max(0, Math.floor(value / 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours > 0) {
+    return `${hours} jam ${minutes} mnt`;
+  }
+
+  return `${minutes} mnt`;
 }
 
 function formatCoordinate(value: number) {
@@ -222,17 +248,24 @@ function HeartbeatMark() {
 export function LiveTrackingViewer({
   dataset,
   mode,
-  startDate,
-  endDate,
-  rangeError,
+  historyDate,
+  sessionsDataset,
+  selectedSession,
+  dateError,
+  sessionSelectionError,
 }: LiveTrackingViewerProps) {
   const initialPoints = normalizePointIds(dataset.points);
-  const isLiveMode = mode === "live" || mode === "live-route";
-  const hasRouteDetails = mode !== "live";
+  const isLiveDestination = mode === "live" || mode === "live-route";
+  const isHistoryIndex = mode === "history" && !selectedSession;
+  const isHistorySelected = mode === "history" && Boolean(selectedSession);
+  const shouldPoll =
+    isLiveDestination || selectedSession?.state === "ongoing";
+  const hasRouteDetails = mode !== "live" && !isHistoryIndex;
+  const hasSheetInteraction = mode !== "live";
   const isHistoryDestination = mode === "history" || mode === "route";
   const [points, setPoints] = useState(initialPoints);
   const [selectedPointId, setSelectedPointId] = useState<number | null>(
-    isLiveMode ? initialPoints.at(-1)?.id ?? null : null,
+    shouldPoll ? initialPoints.at(-1)?.id ?? null : null,
   );
   const [isSheetExpanded, setIsSheetExpanded] = useState(false);
   const [sheetDragHeight, setSheetDragHeight] = useState<number | null>(null);
@@ -255,7 +288,7 @@ export function LiveTrackingViewer({
   }, []);
 
   useEffect(() => {
-    if (!isLiveMode || dataset.status !== "ready") {
+    if (!shouldPoll || dataset.status !== "ready") {
       return;
     }
 
@@ -330,7 +363,7 @@ export function LiveTrackingViewer({
       mounted = false;
       window.clearInterval(interval);
     };
-  }, [dataset.imei, dataset.status, isLiveMode]);
+  }, [dataset.imei, dataset.status, shouldPoll]);
 
   const latestPoint = points.at(-1) ?? null;
   const peakSpeed =
@@ -343,6 +376,12 @@ export function LiveTrackingViewer({
   );
   const mapPoints =
     mode === "live" ? (latestPoint ? [latestPoint] : []) : points;
+  const mapMode =
+    isHistorySelected && selectedSession?.state === "ongoing"
+      ? "live-route"
+      : isHistorySelected
+        ? "route"
+        : mode;
   const timelinePoints = points.slice(-TIMELINE_LIMIT).reverse();
   const historyHref = `/live-tracking/${encodeURIComponent(dataset.imei)}/history`;
   const liveHref = `/live-tracking/${encodeURIComponent(dataset.imei)}`;
@@ -351,6 +390,13 @@ export function LiveTrackingViewer({
     dataset.status === "error"
       ? "Lokasi belum bisa dimuat. Periksa koneksi lalu buka kembali halaman ini."
       : null;
+  const historySessions = sessionsDataset?.sessions ?? [];
+  const sessionsError =
+    sessionsDataset?.status === "error"
+      ? "Daftar perjalanan belum bisa dimuat. Coba lagi beberapa saat."
+      : null;
+  const showsElapsedDuration =
+    mode === "live-route" || selectedSession?.state === "ongoing";
 
   const getExpandedSheetHeight = () =>
     Math.min(window.innerHeight * 0.68, MAX_EXPANDED_SHEET_HEIGHT);
@@ -358,7 +404,7 @@ export function LiveTrackingViewer({
   const handleSheetPointerDown = (
     event: React.PointerEvent<HTMLButtonElement>,
   ) => {
-    if (!hasRouteDetails || event.button !== 0) {
+    if (!hasSheetInteraction || event.button !== 0) {
       return;
     }
 
@@ -477,12 +523,21 @@ export function LiveTrackingViewer({
           </div>
           <div
             className={`${styles.freshness} ${
-              mode === "route" ? styles.routeTone : styles[freshness.tone]
+              mode === "route" ||
+              (mode === "history" && selectedSession?.state !== "ongoing")
+                ? styles.routeTone
+                : styles[freshness.tone]
             }`}
           >
             <span />
             {mode === "route"
               ? "Rute perjalanan"
+              : mode === "history"
+                ? selectedSession?.state === "ongoing"
+                  ? "Sedang berlangsung"
+                  : selectedSession
+                    ? "Rute perjalanan"
+                    : "Riwayat"
               : mode === "live-route" && freshness.isActive
                 ? "Melacak langsung"
                 : freshness.label}
@@ -494,38 +549,31 @@ export function LiveTrackingViewer({
             <div className={styles.datePanelHeading}>
               <div>
                 <strong>Riwayat perjalanan</strong>
-                <span>{formatDateRange(startDate, endDate)}</span>
+                <span>{formatCalendarDate(historyDate)}</span>
               </div>
               <button type="submit">Tampilkan</button>
             </div>
             <div className={styles.dateFields}>
               <label>
-                <span>Dari</span>
+                <span>Tanggal perjalanan</span>
                 <input
                   type="date"
-                  name="start_date"
-                  defaultValue={startDate}
-                  required
-                />
-              </label>
-              <label>
-                <span>Sampai</span>
-                <input
-                  type="date"
-                  name="end_date"
-                  defaultValue={endDate}
+                  name="date"
+                  defaultValue={historyDate}
                   required
                 />
               </label>
             </div>
-            {rangeError ? <p className={styles.fieldError}>{rangeError}</p> : null}
+            {dateError ? (
+              <p className={styles.fieldError}>{dateError}</p>
+            ) : null}
           </form>
         ) : null}
 
         <section className={styles.mapRegion} aria-label="Peta lokasi motor">
           <DynamicHistoryMap
-            key={mode}
-            mode={mode}
+            key={`${mapMode}-${selectedSession?.id ?? "none"}`}
+            mode={mapMode}
             points={mapPoints}
             selectedPointId={selectedPointId}
             onSelectPoint={setSelectedPointId}
@@ -545,15 +593,23 @@ export function LiveTrackingViewer({
             </div>
           )}
 
-          {points.length === 0 && !hasError ? (
+          {(isHistoryIndex || points.length === 0) && !hasError ? (
             <div className={styles.emptyMap}>
-              <strong>Belum ada titik lokasi</strong>
+              <strong>
+                {isHistoryIndex
+                  ? "Pilih perjalanan"
+                  : "Belum ada titik GPS"}
+              </strong>
               <span>
-                {mode === "live"
+                {isHistoryIndex
+                  ? "Pilih salah satu sesi untuk melihat rute di peta."
+                  : mode === "live"
                   ? "Lokasi hari ini akan muncul saat perangkat mengirim data."
                   : mode === "live-route"
                     ? "Belum ada lokasi sejak waktu mulai. Halaman akan memperbarui data secara otomatis."
-                  : "Coba pilih rentang tanggal lain."}
+                    : isHistorySelected
+                      ? "Belum ada titik GPS untuk perjalanan ini."
+                      : "Belum ada lokasi pada periode ini."}
               </span>
             </div>
           ) : null}
@@ -561,19 +617,19 @@ export function LiveTrackingViewer({
 
         <section
           className={`${styles.bottomSheet} ${
-            !hasRouteDetails
+            !hasSheetInteraction
               ? styles.liveSheet
               : isSheetExpanded
                 ? styles.sheetExpanded
                 : styles.sheetCollapsed
           } ${isSheetDragging ? styles.sheetDragging : ""}`}
           style={
-            hasRouteDetails && sheetDragHeight !== null
+            hasSheetInteraction && sheetDragHeight !== null
               ? { height: `${sheetDragHeight}px` }
               : undefined
           }
         >
-          {hasRouteDetails ? (
+          {hasSheetInteraction ? (
             <button
               type="button"
               className={styles.sheetHandle}
@@ -595,6 +651,89 @@ export function LiveTrackingViewer({
           )}
 
           <div className={styles.sheetScroll}>
+            {isHistoryIndex ? (
+              <section className={styles.sessionPicker}>
+                <div className={styles.sessionPickerHeading}>
+                  <div>
+                    <span>{formatCalendarDate(historyDate)}</span>
+                    <h1>{historySessions.length} perjalanan</h1>
+                  </div>
+                  <span>Pilih sesi</span>
+                </div>
+
+                {sessionSelectionError ? (
+                  <p className={styles.sessionNotice}>
+                    {sessionSelectionError}
+                  </p>
+                ) : null}
+                {sessionsError ? (
+                  <p className={styles.sessionNotice}>{sessionsError}</p>
+                ) : null}
+
+                {sessionsDataset?.status === "ready" &&
+                historySessions.length === 0 ? (
+                  <div className={styles.sessionEmpty}>
+                    <strong>Belum ada perjalanan</strong>
+                    <span>
+                      Tidak ada sesi motor pada tanggal yang dipilih.
+                    </span>
+                  </div>
+                ) : (
+                  <div className={styles.sessionList}>
+                    {historySessions.map((session) => (
+                      <Link
+                        key={session.id}
+                        className={styles.sessionItem}
+                        href={`${historyHref}?date=${encodeURIComponent(
+                          historyDate ?? "",
+                        )}&session_id=${session.id}`}
+                      >
+                        <span className={styles.sessionTime}>
+                          <strong>
+                            {formatClock(session.startedAt)} -{" "}
+                            {session.endedAt
+                              ? formatClock(session.endedAt)
+                              : "sekarang"}
+                          </strong>
+                          <small>
+                            {formatDurationSeconds(session.durationSeconds)} ·{" "}
+                            {session.distanceKm.toFixed(2)} km
+                          </small>
+                        </span>
+                        <span
+                          className={`${styles.sessionState} ${
+                            session.state === "ongoing"
+                              ? styles.sessionOngoing
+                              : ""
+                          }`}
+                        >
+                          {session.state === "ongoing"
+                            ? "Sedang berlangsung"
+                            : "Selesai"}
+                        </span>
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="m9 18 6-6-6-6" />
+                        </svg>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </section>
+            ) : (
+              <>
+                {isHistorySelected ? (
+                  <Link
+                    className={styles.historyBackLink}
+                    href={`${historyHref}?date=${encodeURIComponent(
+                      historyDate ?? "",
+                    )}`}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m15 18-6-6 6-6" />
+                    </svg>
+                    Semua perjalanan
+                  </Link>
+                ) : null}
             <div className={styles.sheetHeading}>
               <div>
                 <span>
@@ -604,11 +743,17 @@ export function LiveTrackingViewer({
                       : "Posisi terakhir"
                     : mode === "live-route"
                       ? `Tracking sejak ${formatTime(dataset.startAt, true)}`
+                      : isHistorySelected &&
+                          selectedSession?.state === "ongoing"
+                        ? `Berlangsung sejak ${formatTime(
+                            selectedSession.startedAt,
+                            true,
+                          )}`
                     : "Ringkasan rute"}
                 </span>
                 <h1>
                   {latestPoint
-                    ? isLiveMode
+                    ? shouldPoll
                       ? `Diterima ${formatTime(latestPoint.serverReceivedAt, true)}`
                       : formatTime(latestPoint.serverReceivedAt, true)
                     : "Belum tersedia"}
@@ -631,9 +776,9 @@ export function LiveTrackingViewer({
                   <strong>{Math.round(peakSpeed)} km/j</strong>
                 </div>
                 <div>
-                  <span>{mode === "live-route" ? "Durasi" : "Titik GPS"}</span>
+                  <span>{showsElapsedDuration ? "Durasi" : "Titik GPS"}</span>
                   <strong>
-                    {mode === "live-route" ? elapsedTracking : points.length}
+                    {showsElapsedDuration ? elapsedTracking : points.length}
                   </strong>
                 </div>
               </div>
@@ -689,7 +834,11 @@ export function LiveTrackingViewer({
                 <span>{Math.min(points.length, TIMELINE_LIMIT)} titik terbaru</span>
               </div>
               {timelinePoints.length === 0 ? (
-                <p className={styles.timelineEmpty}>Belum ada data perjalanan.</p>
+                <p className={styles.timelineEmpty}>
+                  {isHistorySelected
+                    ? "Belum ada titik GPS untuk perjalanan ini."
+                    : "Belum ada data perjalanan."}
+                </p>
               ) : (
                 <div className={styles.timelineList}>
                   {timelinePoints.map((point) => (
@@ -720,14 +869,16 @@ export function LiveTrackingViewer({
                 </div>
               )}
             </section> : null}
+              </>
+            )}
           </div>
         </section>
 
         <nav className={styles.bottomNav} aria-label="Navigasi pelacakan">
           <Link
             href={liveHref}
-            className={isLiveMode ? styles.navActive : undefined}
-            aria-current={isLiveMode ? "page" : undefined}
+            className={isLiveDestination ? styles.navActive : undefined}
+            aria-current={isLiveDestination ? "page" : undefined}
           >
             <MapIcon />
             <span>Live</span>

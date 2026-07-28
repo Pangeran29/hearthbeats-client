@@ -175,7 +175,7 @@
 
 .dateFields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -357,6 +357,151 @@
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sessionPicker {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 18px;
+}
+
+.sessionPickerHeading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0 4px;
+}
+
+.sessionPickerHeading > div {
+  min-width: 0;
+}
+
+.sessionPickerHeading span {
+  display: block;
+  color: var(--muted-ink);
+  font-size: 12px;
+}
+
+.sessionPickerHeading h1 {
+  margin-top: 2px;
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.sessionNotice,
+.sessionEmpty {
+  border-radius: 10px;
+  background: var(--quiet-surface);
+  color: var(--muted-ink);
+  font-size: 12px;
+}
+
+.sessionNotice {
+  padding: 10px 12px;
+  color: var(--alert-red);
+}
+
+.sessionEmpty {
+  display: grid;
+  gap: 3px;
+  padding: 16px 14px;
+  text-align: center;
+}
+
+.sessionEmpty strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sessionList {
+  display: grid;
+}
+
+.sessionItem {
+  min-height: 68px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 18px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--quiet-border);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.sessionItem:focus-visible {
+  border-radius: 8px;
+  outline: 3px solid color-mix(in srgb, var(--route-orange) 35%, transparent);
+  outline-offset: 2px;
+}
+
+.sessionTime {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.sessionTime strong {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.sessionTime small {
+  color: var(--muted-ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sessionState {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--quiet-surface);
+  color: var(--muted-ink);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sessionOngoing {
+  background: color-mix(in srgb, var(--live-green) 12%, var(--paper));
+  color: var(--live-green);
+}
+
+.sessionItem > svg,
+.historyBackLink svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sessionItem > svg {
+  color: var(--muted-ink);
+}
+
+.historyBackLink {
+  width: fit-content;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 4px;
+  color: var(--route-orange-deep);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.historyBackLink:focus-visible {
+  border-radius: 6px;
+  outline: 3px solid color-mix(in srgb, var(--route-orange) 35%, transparent);
+  outline-offset: 2px;
 }
 
 .speedMetric {

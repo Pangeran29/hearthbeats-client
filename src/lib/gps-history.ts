@@ -1,4 +1,10 @@
-import type { GpsHistoryApiResponse, GpsHistoryDataset, GpsHistoryPoint } from "@/types/gps";
+import type {
+  GpsHistoryApiResponse,
+  GpsHistoryDataset,
+  GpsHistoryPoint,
+  TrackingSessionsApiResponse,
+  TrackingSessionsDataset,
+} from "@/types/gps";
 
 const DEFAULT_GPS_HISTORY_API_BASE_URL = "http://147.93.156.141:5001/api";
 
@@ -49,24 +55,29 @@ export function getTodayWibDate() {
   return formatWibDate(new Date());
 }
 
-export function getDefaultHistoryDates() {
-  const today = new Date();
-  const sixDaysAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
+export function wibDateToUtcRange(date: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
 
-  return {
-    startDate: formatWibDate(sixDaysAgo),
-    endDate: formatWibDate(today),
-  };
-}
+  if (!match) {
+    return null;
+  }
 
-export function wibDateRangeToUtc(startDate: string, endDate: string) {
-  const start = new Date(`${startDate}T00:00:00${WIB_OFFSET}`);
-  const end = new Date(`${endDate}T23:59:59.999${WIB_OFFSET}`);
+  const [, year, month, day] = match;
+  const yearNumber = Number(year);
+  const monthNumber = Number(month);
+  const dayNumber = Number(day);
+  const calendarDate = new Date(
+    Date.UTC(yearNumber, monthNumber - 1, dayNumber),
+  );
+  const start = new Date(`${date}T00:00:00${WIB_OFFSET}`);
+  const end = new Date(`${date}T23:59:59.999${WIB_OFFSET}`);
 
   if (
     Number.isNaN(start.getTime()) ||
     Number.isNaN(end.getTime()) ||
-    start.getTime() > end.getTime()
+    calendarDate.getUTCFullYear() !== yearNumber ||
+    calendarDate.getUTCMonth() + 1 !== monthNumber ||
+    calendarDate.getUTCDate() !== dayNumber
   ) {
     return null;
   }
@@ -75,6 +86,43 @@ export function wibDateRangeToUtc(startDate: string, endDate: string) {
     startAt: start.toISOString(),
     endAt: end.toISOString(),
   };
+}
+
+function isTrackingSessionsApiResponse(
+  value: unknown,
+): value is TrackingSessionsApiResponse {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  return (
+    typeof record.imei === "string" &&
+    typeof record.date === "string" &&
+    record.timezone === "Asia/Jakarta" &&
+    Array.isArray(record.sessions) &&
+    record.sessions.every((session) => {
+      if (!session || typeof session !== "object") {
+        return false;
+      }
+
+      const item = session as Record<string, unknown>;
+
+      return (
+        typeof item.id === "number" &&
+        typeof item.started_at === "string" &&
+        (item.ended_at === undefined ||
+          item.ended_at === null ||
+          typeof item.ended_at === "string") &&
+        (item.state === "completed" || item.state === "ongoing") &&
+        typeof item.duration_seconds === "number" &&
+        Number.isFinite(item.duration_seconds) &&
+        typeof item.distance_km === "number" &&
+        Number.isFinite(item.distance_km)
+      );
+    })
+  );
 }
 
 export function getWibDayStartUtc(date = getTodayWibDate()) {
@@ -238,6 +286,76 @@ export function getDefaultGpsHistoryParams() {
     imei: DEFAULT_IMEI,
     startAt: getWibDayStartUtc(),
   };
+}
+
+export async function fetchTrackingSessions({
+  imei,
+  date,
+}: {
+  imei?: string;
+  date: string;
+}): Promise<TrackingSessionsDataset> {
+  const effectiveImei = imei?.trim() || DEFAULT_IMEI;
+
+  try {
+    const query = new URLSearchParams({ date });
+    const requestUrl = `${GPS_HISTORY_API_BASE_URL}/devices/${encodeURIComponent(effectiveImei)}/sessions?${query.toString()}`;
+    const response = await fetch(requestUrl, { cache: "no-store" });
+
+    if (!response.ok) {
+      return {
+        status: "error",
+        message: `API request failed with status ${response.status}.`,
+        imei: effectiveImei,
+        date,
+        timezone: "Asia/Jakarta",
+        sessions: [],
+      };
+    }
+
+    const payload: unknown = await response.json();
+
+    if (!isTrackingSessionsApiResponse(payload)) {
+      return {
+        status: "error",
+        message: "API response did not match the expected session format.",
+        imei: effectiveImei,
+        date,
+        timezone: "Asia/Jakarta",
+        sessions: [],
+      };
+    }
+
+    return {
+      status: "ready",
+      imei: payload.imei,
+      date: payload.date,
+      timezone: "Asia/Jakarta",
+      sessions: payload.sessions.map((session) => ({
+        id: session.id,
+        startedAt: normalizeTimestamp(session.started_at),
+        endedAt:
+          typeof session.ended_at === "string"
+            ? normalizeTimestamp(session.ended_at)
+            : undefined,
+        state: session.state,
+        durationSeconds: session.duration_seconds,
+        distanceKm: session.distance_km,
+      })),
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message:
+        error instanceof Error
+          ? `Failed to fetch tracking sessions from ${GPS_HISTORY_API_BASE_URL}: ${error.message}`
+          : "Failed to fetch tracking sessions from the API.",
+      imei: effectiveImei,
+      date,
+      timezone: "Asia/Jakarta",
+      sessions: [],
+    };
+  }
 }
 
 export async function fetchGpsHistory({

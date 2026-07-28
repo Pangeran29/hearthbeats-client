@@ -50,3 +50,43 @@ export type GpsHistoryApiResponse = {
   latest_server_received_at?: string | null;
   points: GpsHistoryApiPoint[];
 };
+
+export type TrackingSession = {
+  id: number;
+  startedAt: string;
+  endedAt?: string;
+  state: "completed" | "ongoing";
+  durationSeconds: number;
+  distanceKm: number;
+};
+
+export type TrackingSessionsDataset =
+  | {
+      status: "ready";
+      imei: string;
+      date: string;
+      timezone: "Asia/Jakarta";
+      sessions: TrackingSession[];
+    }
+  | {
+      status: "error";
+      message: string;
+      imei: string;
+      date: string;
+      timezone: "Asia/Jakarta";
+      sessions: TrackingSession[];
+    };
+
+export type TrackingSessionsApiResponse = {
+  imei: string;
+  date: string;
+  timezone: string;
+  sessions: Array<{
+    id: number;
+    started_at: string;
+    ended_at?: string | null;
+    state: "completed" | "ongoing";
+    duration_seconds: number;
+    distance_km: number;
+  }>;
+};
