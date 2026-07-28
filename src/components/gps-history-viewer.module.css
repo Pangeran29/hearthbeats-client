@@ -486,42 +486,38 @@
   text-decoration: none;
 }
 
-.historyActions {
-  min-height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 4px;
-}
-
-.historyActions .historyBackLink {
-  margin-bottom: 0;
-}
-
-.shareJourneyButton {
-  min-height: 38px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 11px;
-  border: 1px solid var(--route-orange);
-  border-radius: 9px;
-  color: var(--paper);
-  background: var(--route-orange);
-  font-size: 13px;
-  font-weight: 600;
+.mapShareButton {
+  position: absolute;
+  right: 14px;
+  z-index: 810;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 2px solid var(--paper);
+  border-radius: 50%;
+  color: var(--route-orange);
+  background: var(--paper);
+  box-shadow: 0 5px 14px rgb(32 35 31 / 20%);
   cursor: pointer;
+  transition:
+    bottom 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    color 140ms ease,
+    transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.shareJourneyButton:active {
-  background: var(--route-orange-deep);
-  transform: scale(0.98);
+.mapShareButton:hover {
+  color: var(--route-orange-deep);
 }
 
-.shareJourneyButton svg {
-  width: 17px;
-  height: 17px;
+.mapShareButton:active {
+  transform: scale(0.94);
+}
+
+.mapShareButton svg {
+  width: 21px;
+  height: 21px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
@@ -626,99 +622,6 @@
   font-weight: 550;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.timeline {
-  padding: 10px 0 18px;
-  border-top: 1px solid var(--quiet-border);
-}
-
-.timelineHeading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-
-.timelineHeading h2 {
-  font-size: 16px;
-  font-weight: 650;
-}
-
-.timelineHeading span,
-.timelineEmpty {
-  color: var(--muted-ink);
-  font-size: 12px;
-}
-
-.timelineList {
-  display: grid;
-}
-
-.timelineItem {
-  position: relative;
-  width: 100%;
-  min-height: 62px;
-  display: grid;
-  grid-template-columns: 12px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 0;
-  border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--quiet-border) 75%, transparent);
-  background: transparent;
-  color: var(--ink);
-  text-align: left;
-  cursor: pointer;
-}
-
-.timelineDot {
-  width: 8px;
-  height: 8px;
-  border: 2px solid var(--route-orange);
-  border-radius: 50%;
-  background: var(--paper);
-}
-
-.timelineContent,
-.timelineReading {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.timelineContent strong,
-.timelineReading strong {
-  font-size: 13px;
-  font-weight: 550;
-}
-
-.timelineContent span,
-.timelineReading span {
-  overflow: hidden;
-  color: var(--muted-ink);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.timelineReading {
-  text-align: right;
-}
-
-.timelineItemSelected::before {
-  content: "";
-  position: absolute;
-  left: -16px;
-  width: 3px;
-  height: 34px;
-  border-radius: 0 3px 3px 0;
-  background: var(--route-orange);
-}
-
-.timelineItemSelected .timelineDot {
-  background: var(--route-orange);
 }
 
 .bottomNav {

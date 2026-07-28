@@ -50,7 +50,6 @@ type LiveTrackingViewerProps = {
 };
 
 const LIVE_POLL_INTERVAL_MS = 10_000;
-const TIMELINE_LIMIT = 40;
 const COLLAPSED_SHEET_HEIGHT = 214;
 const MAX_EXPANDED_SHEET_HEIGHT = 620;
 const SHEET_SWIPE_THRESHOLD = 32;
@@ -465,7 +464,6 @@ export function LiveTrackingViewer({
       : isHistorySelected
         ? "route"
         : mode;
-  const timelinePoints = points.slice(-TIMELINE_LIMIT).reverse();
   const historyHref = `/live-tracking/${encodeURIComponent(dataset.imei)}/history`;
   const liveHref = `/live-tracking/${encodeURIComponent(dataset.imei)}`;
   const hasError = dataset.status === "error";
@@ -685,6 +683,28 @@ export function LiveTrackingViewer({
             latestIsActive={freshness.isActive}
           />
 
+          {selectedSession?.state === "completed" && points.length > 1 ? (
+            <button
+              type="button"
+              className={styles.mapShareButton}
+              style={{
+                bottom: isSheetExpanded
+                  ? "calc(min(68dvh, 620px) + 64px + env(safe-area-inset-bottom) + 110px)"
+                  : "calc(388px + env(safe-area-inset-bottom))",
+              }}
+              onClick={() => setIsShareOpen(true)}
+              aria-label="Bagikan perjalanan"
+              title="Bagikan perjalanan"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="18" cy="5" r="3" />
+                <circle cx="6" cy="12" r="3" />
+                <circle cx="18" cy="19" r="3" />
+                <path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4" />
+              </svg>
+            </button>
+          ) : null}
+
           {(hasError || pollError) && (
             <div
               className={`${styles.warning} ${
@@ -826,35 +846,17 @@ export function LiveTrackingViewer({
             ) : (
               <>
                 {isHistorySelected ? (
-                  <div className={styles.historyActions}>
-                    <Link
-                      className={styles.historyBackLink}
-                      href={`${historyHref}?date=${encodeURIComponent(
-                        historyDate ?? "",
-                      )}`}
-                    >
-                      <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="m15 18-6-6 6-6" />
-                      </svg>
-                      Semua perjalanan
-                    </Link>
-                    {selectedSession?.state === "completed" &&
-                    points.length > 1 ? (
-                      <button
-                        type="button"
-                        className={styles.shareJourneyButton}
-                        onClick={() => setIsShareOpen(true)}
-                      >
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <circle cx="18" cy="5" r="3" />
-                          <circle cx="6" cy="12" r="3" />
-                          <circle cx="18" cy="19" r="3" />
-                          <path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4" />
-                        </svg>
-                        Bagikan
-                      </button>
-                    ) : null}
-                  </div>
+                  <Link
+                    className={styles.historyBackLink}
+                    href={`${historyHref}?date=${encodeURIComponent(
+                      historyDate ?? "",
+                    )}`}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m15 18-6-6 6-6" />
+                    </svg>
+                    Semua perjalanan
+                  </Link>
                 ) : null}
             <div className={styles.sheetHeading}>
               <div>
@@ -953,47 +955,6 @@ export function LiveTrackingViewer({
               </div>
             </div>
 
-            {hasRouteDetails ? <section className={styles.timeline}>
-              <div className={styles.timelineHeading}>
-                <h2>Catatan perjalanan</h2>
-                <span>{Math.min(points.length, TIMELINE_LIMIT)} titik terbaru</span>
-              </div>
-              {timelinePoints.length === 0 ? (
-                <p className={styles.timelineEmpty}>
-                  {isHistorySelected
-                    ? "Belum ada titik GPS untuk perjalanan ini."
-                    : "Belum ada data perjalanan."}
-                </p>
-              ) : (
-                <div className={styles.timelineList}>
-                  {timelinePoints.map((point) => (
-                    <button
-                      type="button"
-                      key={point.id}
-                      className={
-                        point.id === selectedPointId
-                          ? `${styles.timelineItem} ${styles.timelineItemSelected}`
-                          : styles.timelineItem
-                      }
-                      onClick={() => setSelectedPointId(point.id)}
-                    >
-                      <span className={styles.timelineDot} />
-                      <span className={styles.timelineContent}>
-                        <strong>{formatTime(point.serverReceivedAt, true)}</strong>
-                        <span>
-                          {formatCoordinate(point.latitude)},{" "}
-                          {formatCoordinate(point.longitude)}
-                        </span>
-                      </span>
-                      <span className={styles.timelineReading}>
-                        <strong>{Math.round(point.speedKph)} km/j</strong>
-                        <span>{point.satelliteCount} satelit</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </section> : null}
               </>
             )}
           </div>

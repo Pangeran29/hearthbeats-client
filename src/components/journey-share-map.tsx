@@ -26,9 +26,9 @@ type JourneyShareMapProps = {
 };
 
 const SPEED_COLORS: Record<SpeedBand, string> = {
-  slow: "#b73a20",
-  medium: "#e4512b",
-  fast: "#f2a23a",
+  slow: "#168b52",
+  medium: "#e7a400",
+  fast: "#d93c32",
 };
 
 function haversineMeters(
@@ -153,8 +153,8 @@ function FitShareRoute({ points }: { points: GpsHistoryPoint[] }) {
     );
 
     map.fitBounds(bounds, {
-      paddingTopLeft: [28, 34],
-      paddingBottomRight: [28, 238],
+      paddingTopLeft: [12, 24],
+      paddingBottomRight: [12, 208],
       animate: false,
     });
     map.invalidateSize({ animate: false });
@@ -183,6 +183,7 @@ export function JourneyShareMap({
       className={styles.shareMap}
       center={center}
       zoom={14}
+      zoomSnap={0.25}
       zoomControl={false}
       attributionControl={false}
       dragging={false}

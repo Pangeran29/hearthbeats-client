@@ -99,9 +99,14 @@ function getJourneyTitle(value: string) {
 function MotorcycleIcon() {
   return (
     <svg viewBox="0 0 48 48" aria-hidden="true">
-      <circle cx="12" cy="34" r="7" />
+      <circle cx="11" cy="34" r="7" />
       <circle cx="37" cy="34" r="7" />
-      <path d="M12 34h9l6-12h7l3 12M21 34l-6-14h8l7 14M28 17h7M18 15l5 5" />
+      <path
+        fill="currentColor"
+        stroke="none"
+        d="M19 15h10v4h-5.2l3 4H35l-2.2-5.6 3.8-1.5 2.9 7.4A11 11 0 0 1 42 25l-3.2 3.1A6.8 6.8 0 0 0 37 27c-3.1 0-5.8 2-6.7 4.8H17.7A7 7 0 0 0 11 27a7 7 0 0 0-2.5.5l-2-3.3A11 11 0 0 1 11 23c2.7 0 5.1 1 7 2.7l3-5.2L19 19h-4v-4h4Z"
+      />
+      <path d="m29 19 4.5 12.5M18 26l4-7" />
     </svg>
   );
 }
