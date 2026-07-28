@@ -90,3 +90,9 @@ export type TrackingSessionsApiResponse = {
     distance_km: number;
   }>;
 };
+
+export type DeviceActivity = {
+  lastSeenAt?: string;
+  batteryVoltageLevel?: number;
+  batteryReportedAt?: string;
+};

@@ -1,4 +1,5 @@
 import type {
+  DeviceActivity,
   GpsHistoryApiResponse,
   GpsHistoryDataset,
   GpsHistoryPoint,
@@ -358,7 +359,9 @@ export async function fetchTrackingSessions({
   }
 }
 
-export async function fetchDeviceLastActiveAt(imei?: string) {
+export async function fetchDeviceActivity(
+  imei?: string,
+): Promise<DeviceActivity> {
   const effectiveImei = imei?.trim() || DEFAULT_IMEI;
 
   try {
@@ -368,24 +371,42 @@ export async function fetchDeviceLastActiveAt(imei?: string) {
     );
 
     if (!response.ok) {
-      return undefined;
+      return {};
     }
 
     const payload: unknown = await response.json();
 
     if (!payload || typeof payload !== "object") {
-      return undefined;
+      return {};
     }
 
     const device = payload as Record<string, unknown>;
     const lastSeenAt =
       device.imei === effectiveImei ? device.last_seen_at : undefined;
+    const latestVoltageLevel =
+      device.imei === effectiveImei
+        ? device.latest_voltage_level
+        : undefined;
+    const batteryReportedAt =
+      device.imei === effectiveImei ? device.battery_reported_at : undefined;
 
-    return typeof lastSeenAt === "string"
-      ? normalizeTimestamp(lastSeenAt)
-      : undefined;
+    return {
+      lastSeenAt:
+        typeof lastSeenAt === "string"
+          ? normalizeTimestamp(lastSeenAt)
+          : undefined,
+      batteryVoltageLevel:
+        typeof latestVoltageLevel === "number" &&
+        Number.isInteger(latestVoltageLevel)
+          ? latestVoltageLevel
+          : undefined,
+      batteryReportedAt:
+        typeof batteryReportedAt === "string"
+          ? normalizeTimestamp(batteryReportedAt)
+          : undefined,
+    };
   } catch {
-    return undefined;
+    return {};
   }
 }
 

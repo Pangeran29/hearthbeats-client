@@ -20,6 +20,7 @@ import {
 } from "react";
 
 import type {
+  DeviceActivity,
   GpsHistoryDataset,
   GpsHistoryPoint,
   TrackingSession,
@@ -44,7 +45,7 @@ type LiveTrackingViewerProps = {
   historyDate?: string;
   sessionsDataset?: TrackingSessionsDataset;
   selectedSession?: TrackingSession;
-  lastActiveAt?: string;
+  deviceActivity?: DeviceActivity;
   dateError?: string;
   sessionSelectionError?: string;
 };
@@ -319,13 +320,57 @@ function HeartbeatMark() {
   );
 }
 
+function BatteryIcon({ level }: { level?: number }) {
+  const normalizedLevel =
+    typeof level === "number" ? Math.min(6, Math.max(0, level)) : 0;
+  const fillWidth = level === undefined ? 0 : 2 + (normalizedLevel / 6) * 12;
+
+  return (
+    <svg viewBox="0 0 22 14" aria-hidden="true">
+      <rect x="1" y="2" width="17" height="10" rx="2" />
+      <path d="M20 5v4" />
+      {fillWidth > 0 ? (
+        <rect
+          className={styles.batteryFill}
+          x="3"
+          y="4"
+          width={fillWidth}
+          height="6"
+          rx="1"
+        />
+      ) : null}
+    </svg>
+  );
+}
+
+function getBatteryStatus(level?: number) {
+  switch (level) {
+    case 0:
+      return { label: "Habis", tone: "batteryCritical" };
+    case 1:
+      return { label: "Kritis", tone: "batteryCritical" };
+    case 2:
+      return { label: "Rendah", tone: "batteryWarning" };
+    case 3:
+      return { label: "Cukup", tone: "batteryNeutral" };
+    case 4:
+      return { label: "Sedang", tone: "batteryNeutral" };
+    case 5:
+      return { label: "Baik", tone: "batteryGood" };
+    case 6:
+      return { label: "Penuh", tone: "batteryGood" };
+    default:
+      return { label: "Tidak diketahui", tone: "batteryNeutral" };
+  }
+}
+
 export function LiveTrackingViewer({
   dataset,
   mode,
   historyDate,
   sessionsDataset,
   selectedSession,
-  lastActiveAt,
+  deviceActivity,
   dateError,
   sessionSelectionError,
 }: LiveTrackingViewerProps) {
@@ -453,9 +498,12 @@ export function LiveTrackingViewer({
   );
   const headerLastActiveAt = latestTimestamp(
     latestPoint?.serverReceivedAt,
-    lastActiveAt ?? dataset.latestServerReceivedAt,
+    deviceActivity?.lastSeenAt ?? dataset.latestServerReceivedAt,
   );
   const headerFreshness = getFreshness(headerLastActiveAt, now);
+  const batteryStatus = getBatteryStatus(
+    deviceActivity?.batteryVoltageLevel,
+  );
   const mapPoints =
     mode === "live" ? (latestPoint ? [latestPoint] : []) : points;
   const mapMode =
@@ -630,13 +678,31 @@ export function LiveTrackingViewer({
             <strong>Motor Saya</strong>
             <span>IMEI {dataset.imei}</span>
           </div>
-          <div
-            className={`${styles.freshness} ${
-              styles[headerFreshness.tone]
-            }`}
-          >
-            <span />
-            {formatLastActive(headerLastActiveAt, now)}
+          <div className={styles.headerStatus}>
+            <div
+              className={`${styles.freshness} ${
+                styles[headerFreshness.tone]
+              }`}
+            >
+              <span />
+              {formatLastActive(headerLastActiveAt, now)}
+            </div>
+            <div
+              className={`${styles.batteryStatus} ${
+                styles[batteryStatus.tone]
+              }`}
+              title={
+                deviceActivity?.batteryReportedAt
+                  ? `Status baterai diterima ${formatTime(
+                      deviceActivity.batteryReportedAt,
+                      true,
+                    )}`
+                  : "Status baterai belum tersedia"
+              }
+            >
+              <BatteryIcon level={deviceActivity?.batteryVoltageLevel} />
+              <span>Baterai {batteryStatus.label}</span>
+            </div>
           </div>
         </header>
 

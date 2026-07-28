@@ -75,6 +75,66 @@
   box-shadow: 0 5px 16px rgb(32 35 31 / 10%);
 }
 
+.headerStatus {
+  min-width: 0;
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+}
+
+.headerStatus .freshness {
+  min-height: 26px;
+  padding-inline: 8px;
+  font-size: 11px;
+}
+
+.batteryStatus {
+  max-width: 128px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.batteryStatus > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.batteryStatus svg {
+  width: 18px;
+  height: 12px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.batteryStatus .batteryFill {
+  fill: currentColor;
+  stroke: none;
+}
+
+.batteryCritical {
+  color: var(--alert-red);
+}
+
+.batteryWarning {
+  color: var(--warning-amber);
+}
+
+.batteryNeutral {
+  color: var(--muted-ink);
+}
+
+.batteryGood {
+  color: var(--live-green);
+}
+
 .freshness > span,
 .liveLabel > span {
   width: 7px;
@@ -696,6 +756,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .batteryStatus {
+    max-width: 98px;
   }
 
   .datePanel {
