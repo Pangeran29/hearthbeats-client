@@ -36,10 +36,12 @@ Heartbeats combines a motorcycle-installed GPS tracker, Telegram-delivered acces
 ## Capabilities and Constraints
 
 - One customer maps to one motorcycle and one GPS device.
-- The first redesign focuses on separate Live and History screens.
+- The customer application has separate Live, History, and Service screens.
 - Live is the default screen after a customer opens the website.
 - History accepts a start date and end date. The implementation must translate those dates into complete WIB calendar-day boundaries for the API.
-- The first release displays last update time, speed, route distance, a location-point timeline, coordinates, and GPS signal information.
+- Live displays the latest position, data freshness, battery state, and a WIB daily ride summary with distance, moving time, and average speed.
+- History displays session routes, route distance, peak speed, duration, coordinates, and GPS signal information.
+- Service displays total GPS distance tracked by Heartbeats, progress to the next 1.000 km milestone, interval recommendations, and the latest 20 achieved milestones.
 - The product remains a website and must be designed mobile-first.
 - Desktop presentation must preserve the mobile application composition in a centered, width-constrained viewport.
 - Existing GPS data and backend APIs remain the functional starting point.

@@ -93,6 +93,85 @@ export type TrackingSessionsApiResponse = {
 
 export type DeviceActivity = {
   lastSeenAt?: string;
+  engineStatus?: "on" | "off" | "unknown";
   batteryVoltageLevel?: number;
   batteryReportedAt?: string;
+};
+
+export type DailyRideSummary = {
+  status: "ready" | "error";
+  message?: string;
+  imei: string;
+  date: string;
+  timezone: "Asia/Jakarta";
+  generatedAt: string;
+  customerName?: string;
+  totalDistanceKm: number;
+  ridingSeconds: number;
+  averageSpeedKph: number;
+};
+
+export type DailyRideSummaryApiResponse = {
+  imei: string;
+  date: string;
+  timezone: string;
+  generated_at: string;
+  customer_name?: string | null;
+  total_distance_km: number;
+  riding_seconds: number;
+  average_speed_kph: number;
+};
+
+export type ServiceRecommendation = {
+  code: string;
+  intervalKm: number;
+  title: string;
+  items: string[];
+};
+
+export type ServiceMilestone = {
+  milestoneNumber: number;
+  milestoneKm: number;
+  achievedOn: string;
+  recommendationCode: string;
+  recommendationLabel: string;
+  recommendationTitle: string;
+  recommendationItems: string[];
+};
+
+export type DeviceServiceSummary = {
+  status: "ready" | "error";
+  message?: string;
+  imei: string;
+  timezone: "Asia/Jakarta";
+  generatedAt: string;
+  totalTrackedDistanceKm: number;
+  nextMilestoneKm: number;
+  distanceRemainingKm: number;
+  nextRecommendation: ServiceRecommendation;
+  milestones: ServiceMilestone[];
+};
+
+export type DeviceServiceApiResponse = {
+  imei: string;
+  timezone: string;
+  generated_at: string;
+  total_tracked_distance_km: number;
+  next_milestone_km: number;
+  distance_remaining_km: number;
+  next_recommendation: {
+    code: string;
+    interval_km: number;
+    title: string;
+    items: string[];
+  };
+  milestones: Array<{
+    milestone_number: number;
+    milestone_km: number;
+    achieved_on: string;
+    recommendation_code: string;
+    recommendation_label: string;
+    recommendation_title: string;
+    recommendation_items: string[];
+  }>;
 };

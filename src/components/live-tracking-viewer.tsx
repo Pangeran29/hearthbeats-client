@@ -20,6 +20,7 @@ import {
 } from "react";
 
 import type {
+  DailyRideSummary,
   DeviceActivity,
   GpsHistoryDataset,
   GpsHistoryPoint,
@@ -46,11 +47,13 @@ type LiveTrackingViewerProps = {
   sessionsDataset?: TrackingSessionsDataset;
   selectedSession?: TrackingSession;
   deviceActivity?: DeviceActivity;
+  dailyRideSummary?: DailyRideSummary;
   dateError?: string;
   sessionSelectionError?: string;
 };
 
 const LIVE_POLL_INTERVAL_MS = 10_000;
+const DAILY_SUMMARY_POLL_INTERVAL_MS = 60_000;
 const COLLAPSED_SHEET_HEIGHT = 214;
 const MAX_EXPANDED_SHEET_HEIGHT = 620;
 const SHEET_SWIPE_THRESHOLD = 32;
@@ -140,6 +143,56 @@ function formatDurationSeconds(value: number) {
   return `${minutes} mnt`;
 }
 
+function formatWibDateKey(value: number) {
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "Asia/Jakarta",
+  }).format(new Date(value));
+}
+
+function formatWibGreeting(value: string) {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      hour12: false,
+      timeZone: "Asia/Jakarta",
+    }).format(new Date(value)),
+  );
+
+  if (hour >= 5 && hour < 11) {
+    return "Selamat pagi";
+  }
+  if (hour >= 11 && hour < 15) {
+    return "Selamat siang";
+  }
+  if (hour >= 15 && hour < 18) {
+    return "Selamat sore";
+  }
+  return "Selamat malam";
+}
+
+function formatDecimal(value: number, digits: number) {
+  return new Intl.NumberFormat("id-ID", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+}
+
+function formatRidingTime(value: number) {
+  const totalMinutes =
+    value > 0 ? Math.max(1, Math.round(value / 60)) : 0;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours > 0) {
+    return minutes > 0 ? `${hours}j ${minutes}m` : `${hours} jam`;
+  }
+
+  return `${minutes} mnt`;
+}
+
 function formatCoordinate(value: number) {
   return value.toFixed(6);
 }
@@ -224,6 +277,7 @@ function getFreshness(value: string, now: number) {
   }
 
   let elapsed = `${ageMinutes} mnt lalu`;
+  let tone = "stale";
 
   if (ageMinutes >= 24 * 60) {
     elapsed = `${Math.floor(ageMinutes / (24 * 60))} hari lalu`;
@@ -231,56 +285,15 @@ function getFreshness(value: string, now: number) {
     elapsed = `${Math.floor(ageMinutes / 60)} jam lalu`;
   }
 
+  if (ageMinutes >= 60) {
+    tone = "offline";
+  }
+
   return {
     isActive,
-    tone: "offline",
+    tone,
     label: `Terakhir aktif ${elapsed}`,
   };
-}
-
-function formatLastActive(value: string, now: number) {
-  const receivedAt = Date.parse(value);
-
-  if (Number.isNaN(receivedAt)) {
-    return "Terakhir aktif tidak diketahui";
-  }
-
-  const ageMinutes = Math.max(
-    0,
-    Math.floor((now - receivedAt) / (60 * 1000)),
-  );
-
-  if (ageMinutes < 1) {
-    return "Terakhir aktif baru saja";
-  }
-
-  if (ageMinutes < 60) {
-    return `Terakhir aktif ${ageMinutes} mnt lalu`;
-  }
-
-  if (ageMinutes < 24 * 60) {
-    return `Terakhir aktif ${Math.floor(ageMinutes / 60)} jam lalu`;
-  }
-
-  return `Terakhir aktif ${Math.floor(ageMinutes / (24 * 60))} hari lalu`;
-}
-
-function latestTimestamp(
-  primary: string | undefined,
-  fallback: string,
-) {
-  const primaryTime = Date.parse(primary ?? "");
-  const fallbackTime = Date.parse(fallback);
-
-  if (Number.isNaN(primaryTime)) {
-    return fallback;
-  }
-
-  if (Number.isNaN(fallbackTime)) {
-    return primary as string;
-  }
-
-  return primaryTime >= fallbackTime ? (primary as string) : fallback;
 }
 
 function MapIcon() {
@@ -297,6 +310,14 @@ function HistoryIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
       <path d="M3 3v5h5M12 7v5l3 2" />
+    </svg>
+  );
+}
+
+function ServiceIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M14.7 6.3a4 4 0 0 0-5-5L12 3.6 9.6 6 7.3 3.7a4 4 0 0 0 5 5l-7.7 7.7a2.1 2.1 0 0 0 3 3l7.7-7.7a4 4 0 0 0 5-5L18 5l-2.4 2.4-2.3-2.3Z" />
     </svg>
   );
 }
@@ -364,6 +385,18 @@ function getBatteryStatus(level?: number) {
   }
 }
 
+function getEngineStatus(status?: DeviceActivity["engineStatus"]) {
+  if (status === "on") {
+    return { label: "Motor hidup", tone: "engineOn" };
+  }
+
+  if (status === "off") {
+    return { label: "Motor mati", tone: "engineOff" };
+  }
+
+  return { label: "Status tidak diketahui", tone: "engineUnknown" };
+}
+
 export function LiveTrackingViewer({
   dataset,
   mode,
@@ -371,6 +404,7 @@ export function LiveTrackingViewer({
   sessionsDataset,
   selectedSession,
   deviceActivity,
+  dailyRideSummary,
   dateError,
   sessionSelectionError,
 }: LiveTrackingViewerProps) {
@@ -397,6 +431,8 @@ export function LiveTrackingViewer({
   const [now, setNow] = useState(() => Date.now());
   const [isDatePending, startDateTransition] = useTransition();
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [currentDailySummary, setCurrentDailySummary] =
+    useState(dailyRideSummary);
   const router = useRouter();
   const latestTimestampRef = useRef(dataset.latestServerReceivedAt);
   const nextIdRef = useRef(initialPoints.length);
@@ -488,6 +524,55 @@ export function LiveTrackingViewer({
     };
   }, [dataset.imei, dataset.status, shouldPoll]);
 
+  useEffect(() => {
+    if (mode !== "live") {
+      return;
+    }
+
+    let mounted = true;
+    let requestInFlight = false;
+
+    const refresh = async () => {
+      if (requestInFlight) {
+        return;
+      }
+
+      requestInFlight = true;
+      const date = formatWibDateKey(Date.now());
+
+      try {
+        const response = await fetch(
+          `/api/daily-summary?imei=${encodeURIComponent(
+            dataset.imei,
+          )}&date=${encodeURIComponent(date)}`,
+          { cache: "no-store" },
+        );
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload: DailyRideSummary = await response.json();
+        if (mounted) {
+          setCurrentDailySummary(payload);
+        }
+      } catch {
+        // Preserve the last successful summary while connectivity recovers.
+      } finally {
+        requestInFlight = false;
+      }
+    };
+
+    const interval = window.setInterval(
+      refresh,
+      DAILY_SUMMARY_POLL_INTERVAL_MS,
+    );
+    return () => {
+      mounted = false;
+      window.clearInterval(interval);
+    };
+  }, [dataset.imei, mode]);
+
   const latestPoint = points.at(-1) ?? null;
   const peakSpeed =
     points.length > 0 ? Math.max(...points.map((point) => point.speedKph)) : 0;
@@ -496,14 +581,10 @@ export function LiveTrackingViewer({
     latestPoint?.serverReceivedAt ?? dataset.latestServerReceivedAt,
     now,
   );
-  const headerLastActiveAt = latestTimestamp(
-    latestPoint?.serverReceivedAt,
-    deviceActivity?.lastSeenAt ?? dataset.latestServerReceivedAt,
-  );
-  const headerFreshness = getFreshness(headerLastActiveAt, now);
   const batteryStatus = getBatteryStatus(
     deviceActivity?.batteryVoltageLevel,
   );
+  const engineStatus = getEngineStatus(deviceActivity?.engineStatus);
   const mapPoints =
     mode === "live" ? (latestPoint ? [latestPoint] : []) : points;
   const mapMode =
@@ -514,6 +595,20 @@ export function LiveTrackingViewer({
         : mode;
   const historyHref = `/live-tracking/${encodeURIComponent(dataset.imei)}/history`;
   const liveHref = `/live-tracking/${encodeURIComponent(dataset.imei)}`;
+  const serviceHref = `/live-tracking/${encodeURIComponent(dataset.imei)}/service`;
+  const latestCoordinates = latestPoint
+    ? `${formatCoordinate(latestPoint.latitude)}, ${formatCoordinate(
+        latestPoint.longitude,
+      )}`
+    : null;
+  const readyDailySummary =
+    currentDailySummary?.status === "ready" ? currentDailySummary : null;
+  const greeting = formatWibGreeting(
+    currentDailySummary?.generatedAt ?? dataset.latestServerReceivedAt,
+  );
+  const greetingName = currentDailySummary?.customerName?.trim();
+  const dailySummaryDate =
+    currentDailySummary?.date ?? formatWibDateKey(now);
   const hasError = dataset.status === "error";
   const datasetError =
     dataset.status === "error"
@@ -680,17 +775,19 @@ export function LiveTrackingViewer({
           </div>
           <div className={styles.headerStatus}>
             <div
-              className={`${styles.freshness} ${
-                styles[headerFreshness.tone]
+              className={`${styles.statusItem} ${styles.connectionStatus} ${
+                styles[engineStatus.tone]
               }`}
+              aria-label={engineStatus.label}
             >
-              <span />
-              {formatLastActive(headerLastActiveAt, now)}
+              <span aria-hidden="true" />
+              <span>{engineStatus.label}</span>
             </div>
             <div
-              className={`${styles.batteryStatus} ${
+              className={`${styles.statusItem} ${styles.batteryStatus} ${
                 styles[batteryStatus.tone]
               }`}
+              aria-label={`Baterai ${batteryStatus.label}`}
               title={
                 deviceActivity?.batteryReportedAt
                   ? `Status baterai diterima ${formatTime(
@@ -701,7 +798,7 @@ export function LiveTrackingViewer({
               }
             >
               <BatteryIcon level={deviceActivity?.batteryVoltageLevel} />
-              <span>Baterai {batteryStatus.label}</span>
+              <span aria-hidden="true">{batteryStatus.label}</span>
             </div>
           </div>
         </header>
@@ -794,7 +891,7 @@ export function LiveTrackingViewer({
                 {isHistoryIndex
                   ? "Pilih salah satu sesi untuk melihat rute di peta."
                   : mode === "live"
-                  ? "Lokasi hari ini akan muncul saat perangkat mengirim data."
+                  ? "Posisi akan muncul saat perangkat mengirim data GPS."
                   : mode === "live-route"
                     ? "Belum ada lokasi sejak waktu mulai. Halaman akan memperbarui data secara otomatis."
                     : isHistorySelected
@@ -924,102 +1021,113 @@ export function LiveTrackingViewer({
                     Semua perjalanan
                   </Link>
                 ) : null}
-            <div className={styles.sheetHeading}>
-              <div>
-                <span>
-                  {mode === "live"
-                    ? freshness.isActive
-                      ? "Motor aktif"
-                      : "Posisi terakhir"
-                    : `Ringkasan rute · ${formatRouteDate(routeStartAt)}`}
-                </span>
-                <h1>
-                  {hasRouteDetails
-                    ? routeTimeRange
-                    : latestPoint
+            {hasRouteDetails ? (
+              <>
+                <div className={styles.sheetHeading}>
+                  <div>
+                    <span>
+                      Ringkasan rute · {formatRouteDate(routeStartAt)}
+                    </span>
+                    <h1>{routeTimeRange}</h1>
+                  </div>
+                  <div className={styles.durationMetric}>
+                    <strong>{routeDuration}</strong>
+                    <span>Durasi</span>
+                  </div>
+                </div>
+
+                <div className={styles.metrics}>
+                  <div>
+                    <span>Jarak</span>
+                    <strong>{distance.toFixed(2)} km</strong>
+                  </div>
+                  <div>
+                    <span>Kecepatan tertinggi</span>
+                    <strong>{Math.round(peakSpeed)} km/j</strong>
+                  </div>
+                  <div>
+                    <span>Titik GPS</span>
+                    <strong>{points.length}</strong>
+                  </div>
+                </div>
+
+                <div className={styles.latestDetails}>
+                  <div>
+                    <span>Koordinat</span>
+                    <strong>{latestCoordinates ?? "-"}</strong>
+                  </div>
+                  <div>
+                    <span>Sinyal GPS</span>
+                    <strong>
+                      {latestPoint
+                        ? `${latestPoint.satelliteCount} satelit`
+                        : "-"}
+                    </strong>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className={styles.liveSummary}>
+                <div className={styles.dailySummaryHeading}>
+                  <p>
+                    {greeting}
+                    {greetingName ? `, ${greetingName}` : ""}
+                  </p>
+                  <h1>Ringkasan perjalanan hari ini</h1>
+                  <time dateTime={dailySummaryDate}>
+                    {formatCalendarDate(dailySummaryDate)}
+                  </time>
+                </div>
+
+                <div className={styles.dailyMetrics}>
+                  <div>
+                    <strong>
+                      {readyDailySummary
+                        ? formatDecimal(
+                            readyDailySummary.totalDistanceKm,
+                            2,
+                          )
+                        : "—"}
+                      {readyDailySummary ? <small>km</small> : null}
+                    </strong>
+                    <span>Jarak tempuh</span>
+                  </div>
+                  <div>
+                    <strong>
+                      {readyDailySummary
+                        ? formatRidingTime(readyDailySummary.ridingSeconds)
+                        : "—"}
+                    </strong>
+                    <span>Waktu berkendara</span>
+                  </div>
+                  <div>
+                    <strong>
+                      {readyDailySummary
+                        ? formatDecimal(
+                            readyDailySummary.averageSpeedKph,
+                            1,
+                          )
+                        : "—"}
+                      {readyDailySummary ? <small>km/j</small> : null}
+                    </strong>
+                    <span>Kecepatan rata-rata</span>
+                  </div>
+                </div>
+
+                <div className={styles.latestPosition}>
+                  <span>Posisi terakhir</span>
+                  <strong>
+                    {latestPoint
                       ? `Diterima ${formatTime(
                           latestPoint.serverReceivedAt,
                           true,
                         )}`
                       : "Belum tersedia"}
-                </h1>
-              </div>
-              <div
-                className={
-                  hasRouteDetails
-                    ? styles.durationMetric
-                    : styles.speedMetric
-                }
-              >
-                <strong>
-                  {hasRouteDetails
-                    ? routeDuration
-                    : Math.round(latestPoint?.speedKph ?? 0)}
-                </strong>
-                <span>{hasRouteDetails ? "Durasi" : "km/j"}</span>
-              </div>
-            </div>
-
-            {hasRouteDetails ? (
-              <div className={styles.metrics}>
-                <div>
-                  <span>Jarak</span>
-                  <strong>{distance.toFixed(2)} km</strong>
-                </div>
-                <div>
-                  <span>Kecepatan tertinggi</span>
-                  <strong>{Math.round(peakSpeed)} km/j</strong>
-                </div>
-                <div>
-                  <span>Titik GPS</span>
-                  <strong>{points.length}</strong>
-                </div>
-              </div>
-            ) : (
-              <div className={styles.metrics}>
-                <div>
-                  <span>Kecepatan</span>
-                  <strong>{Math.round(latestPoint?.speedKph ?? 0)} km/j</strong>
-                </div>
-                <div>
-                  <span>Sinyal GPS</span>
-                  <strong>
-                    {latestPoint ? `${latestPoint.satelliteCount} satelit` : "-"}
                   </strong>
-                </div>
-                <div>
-                  <span>Arah</span>
-                  <strong>{latestPoint ? `${Math.round(latestPoint.course)}°` : "-"}</strong>
+                  <small>{latestCoordinates ?? "-"}</small>
                 </div>
               </div>
             )}
-
-            <div className={styles.latestDetails}>
-              <div>
-                <span>Koordinat</span>
-                <strong>
-                  {latestPoint
-                    ? `${formatCoordinate(latestPoint.latitude)}, ${formatCoordinate(
-                        latestPoint.longitude,
-                      )}`
-                    : "-"}
-                </strong>
-              </div>
-              <div>
-                <span>{!hasRouteDetails ? "Status" : "Sinyal GPS"}</span>
-                <strong>
-                  {!hasRouteDetails
-                    ? latestPoint
-                      ? freshness.isActive
-                        ? "Motor aktif"
-                        : "Tidak aktif"
-                      : "-"
-                    : latestPoint
-                      ? `${latestPoint.satelliteCount} satelit`
-                      : "-"}
-                </strong>
-              </div>
-            </div>
 
               </>
             )}
@@ -1042,6 +1150,10 @@ export function LiveTrackingViewer({
           >
             <HistoryIcon />
             <span>Riwayat</span>
+          </Link>
+          <Link href={serviceHref}>
+            <ServiceIcon />
+            <span>Servis</span>
           </Link>
         </nav>
         {selectedSession?.state === "completed" && points.length > 1 ? (

@@ -7,7 +7,7 @@ related_targets: ["src/app/live-tracking/[imei]/history/page.tsx"]
 
 ## Scope
 
-Operate-mode customer tracking experience covering the default Live route and its related History screen.
+Operate-mode customer experience covering the default Live route and its related History and Service screens.
 
 ## Audience And Job
 
@@ -16,9 +16,10 @@ A motorcycle owner arrives from Telegram on a phone and needs to locate their si
 ## Structure
 
 - Live is the default destination.
-- Persistent bottom navigation contains Live and History only.
-- Live prioritizes the latest marker, freshness, current speed, coordinates, GPS signal, route distance, and recent points.
+- Persistent bottom navigation contains Live, History, and Service.
+- Live prioritizes the latest marker, freshness, battery state, a time-aware customer greeting, daily distance, moving time, average speed, and the latest coordinates.
 - History uses start and end dates, maps them to complete WIB days, and shows route metrics and a selectable point timeline.
+- Service shows total tracked GPS distance, progress toward the next 1.000 km milestone, interval-based recommendations, and the latest 20 milestones.
 - Details live in a draggable sheet that preserves map context at every snap point.
 
 ## Direction
@@ -27,7 +28,7 @@ Calm Roadbook combines Concept 1's clear map hierarchy and sheet structure with 
 
 ## States
 
-Initial loading, live refresh warning with last-known data preserved, stale location, offline device, no position, empty history, invalid date range, and API failure.
+Initial loading, live refresh warning with last-known data preserved, stale location, offline device, no position, empty history, empty service milestones, invalid date range, and API failure.
 
 ## Constraints
 

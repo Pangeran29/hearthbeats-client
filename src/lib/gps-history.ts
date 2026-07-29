@@ -1,5 +1,9 @@
 import type {
+  DailyRideSummary,
+  DailyRideSummaryApiResponse,
   DeviceActivity,
+  DeviceServiceApiResponse,
+  DeviceServiceSummary,
   GpsHistoryApiResponse,
   GpsHistoryDataset,
   GpsHistoryPoint,
@@ -121,6 +125,86 @@ function isTrackingSessionsApiResponse(
         Number.isFinite(item.duration_seconds) &&
         typeof item.distance_km === "number" &&
         Number.isFinite(item.distance_km)
+      );
+    })
+  );
+}
+
+function isDailyRideSummaryApiResponse(
+  value: unknown,
+): value is DailyRideSummaryApiResponse {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  return (
+    typeof record.imei === "string" &&
+    typeof record.date === "string" &&
+    record.timezone === "Asia/Jakarta" &&
+    typeof record.generated_at === "string" &&
+    (record.customer_name === undefined ||
+      record.customer_name === null ||
+      typeof record.customer_name === "string") &&
+    typeof record.total_distance_km === "number" &&
+    Number.isFinite(record.total_distance_km) &&
+    typeof record.riding_seconds === "number" &&
+    Number.isFinite(record.riding_seconds) &&
+    typeof record.average_speed_kph === "number" &&
+    Number.isFinite(record.average_speed_kph)
+  );
+}
+
+function isDeviceServiceApiResponse(
+  value: unknown,
+): value is DeviceServiceApiResponse {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  const recommendation = record.next_recommendation;
+
+  if (!recommendation || typeof recommendation !== "object") {
+    return false;
+  }
+
+  const recommendationRecord = recommendation as Record<string, unknown>;
+
+  return (
+    typeof record.imei === "string" &&
+    record.timezone === "Asia/Jakarta" &&
+    typeof record.generated_at === "string" &&
+    typeof record.total_tracked_distance_km === "number" &&
+    Number.isFinite(record.total_tracked_distance_km) &&
+    typeof record.next_milestone_km === "number" &&
+    Number.isFinite(record.next_milestone_km) &&
+    typeof record.distance_remaining_km === "number" &&
+    Number.isFinite(record.distance_remaining_km) &&
+    typeof recommendationRecord.code === "string" &&
+    typeof recommendationRecord.interval_km === "number" &&
+    typeof recommendationRecord.title === "string" &&
+    Array.isArray(recommendationRecord.items) &&
+    recommendationRecord.items.every((item) => typeof item === "string") &&
+    Array.isArray(record.milestones) &&
+    record.milestones.every((milestone) => {
+      if (!milestone || typeof milestone !== "object") {
+        return false;
+      }
+
+      const item = milestone as Record<string, unknown>;
+      return (
+        typeof item.milestone_number === "number" &&
+        typeof item.milestone_km === "number" &&
+        typeof item.achieved_on === "string" &&
+        typeof item.recommendation_code === "string" &&
+        typeof item.recommendation_label === "string" &&
+        typeof item.recommendation_title === "string" &&
+        Array.isArray(item.recommendation_items) &&
+        item.recommendation_items.every(
+          (recommendationItem) => typeof recommendationItem === "string",
+        )
       );
     })
   );
@@ -359,6 +443,157 @@ export async function fetchTrackingSessions({
   }
 }
 
+export async function fetchDailyRideSummary({
+  imei,
+  date,
+}: {
+  imei?: string;
+  date: string;
+}): Promise<DailyRideSummary> {
+  const effectiveImei = imei?.trim() || DEFAULT_IMEI;
+  const generatedAt = new Date().toISOString();
+  const emptySummary = {
+    imei: effectiveImei,
+    date,
+    timezone: "Asia/Jakarta" as const,
+    generatedAt,
+    totalDistanceKm: 0,
+    ridingSeconds: 0,
+    averageSpeedKph: 0,
+  };
+
+  try {
+    const query = new URLSearchParams({ date });
+    const requestUrl = `${GPS_HISTORY_API_BASE_URL}/devices/${encodeURIComponent(effectiveImei)}/daily-summary?${query.toString()}`;
+    const response = await fetch(requestUrl, { cache: "no-store" });
+
+    if (!response.ok) {
+      return {
+        status: "error",
+        message: `API request failed with status ${response.status}.`,
+        ...emptySummary,
+      };
+    }
+
+    const payload: unknown = await response.json();
+
+    if (!isDailyRideSummaryApiResponse(payload)) {
+      return {
+        status: "error",
+        message: "API response did not match the expected daily summary format.",
+        ...emptySummary,
+      };
+    }
+
+    return {
+      status: "ready",
+      imei: payload.imei,
+      date: payload.date,
+      timezone: "Asia/Jakarta",
+      generatedAt: normalizeTimestamp(payload.generated_at),
+      customerName:
+        typeof payload.customer_name === "string"
+          ? payload.customer_name
+          : undefined,
+      totalDistanceKm: payload.total_distance_km,
+      ridingSeconds: payload.riding_seconds,
+      averageSpeedKph: payload.average_speed_kph,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message:
+        error instanceof Error
+          ? `Failed to fetch the daily ride summary from ${GPS_HISTORY_API_BASE_URL}: ${error.message}`
+          : "Failed to fetch the daily ride summary from the API.",
+      ...emptySummary,
+    };
+  }
+}
+
+export async function fetchDeviceServiceSummary(
+  imei?: string,
+): Promise<DeviceServiceSummary> {
+  const effectiveImei = imei?.trim() || DEFAULT_IMEI;
+  const emptySummary = {
+    imei: effectiveImei,
+    timezone: "Asia/Jakarta" as const,
+    generatedAt: new Date().toISOString(),
+    totalTrackedDistanceKm: 0,
+    nextMilestoneKm: 1_000,
+    distanceRemainingKm: 1_000,
+    nextRecommendation: {
+      code: "service_1000",
+      intervalKm: 1_000,
+      title: "Rekomendasi servis 1.000 km",
+      items: [],
+    },
+    milestones: [],
+  };
+
+  try {
+    const response = await fetch(
+      `${GPS_HISTORY_API_BASE_URL}/devices/${encodeURIComponent(effectiveImei)}/service`,
+      { cache: "no-store" },
+    );
+
+    if (!response.ok) {
+      return {
+        status: "error",
+        message:
+          response.status === 404
+            ? "Perangkat tidak ditemukan."
+            : `API request failed with status ${response.status}.`,
+        ...emptySummary,
+      };
+    }
+
+    const payload: unknown = await response.json();
+
+    if (!isDeviceServiceApiResponse(payload)) {
+      return {
+        status: "error",
+        message: "API response did not match the expected service format.",
+        ...emptySummary,
+      };
+    }
+
+    return {
+      status: "ready",
+      imei: payload.imei,
+      timezone: "Asia/Jakarta",
+      generatedAt: normalizeTimestamp(payload.generated_at),
+      totalTrackedDistanceKm: payload.total_tracked_distance_km,
+      nextMilestoneKm: payload.next_milestone_km,
+      distanceRemainingKm: payload.distance_remaining_km,
+      nextRecommendation: {
+        code: payload.next_recommendation.code,
+        intervalKm: payload.next_recommendation.interval_km,
+        title: payload.next_recommendation.title,
+        items: payload.next_recommendation.items,
+      },
+      milestones: payload.milestones.map((milestone) => ({
+        milestoneNumber: milestone.milestone_number,
+        milestoneKm: milestone.milestone_km,
+        achievedOn: milestone.achieved_on,
+        recommendationCode: milestone.recommendation_code,
+        recommendationLabel: milestone.recommendation_label,
+        recommendationTitle: milestone.recommendation_title,
+        recommendationItems: milestone.recommendation_items,
+      })),
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message:
+        error instanceof Error
+          ? `Failed to fetch service data from ${GPS_HISTORY_API_BASE_URL}: ${error.message}`
+          : "Failed to fetch service data from the API.",
+      ...emptySummary,
+    };
+  }
+}
+
 export async function fetchDeviceActivity(
   imei?: string,
 ): Promise<DeviceActivity> {
@@ -387,6 +622,10 @@ export async function fetchDeviceActivity(
       device.imei === effectiveImei
         ? device.latest_voltage_level
         : undefined;
+    const latestEngineStatus =
+      device.imei === effectiveImei
+        ? device.latest_engine_status
+        : undefined;
     const batteryReportedAt =
       device.imei === effectiveImei ? device.battery_reported_at : undefined;
 
@@ -395,6 +634,10 @@ export async function fetchDeviceActivity(
         typeof lastSeenAt === "string"
           ? normalizeTimestamp(lastSeenAt)
           : undefined,
+      engineStatus:
+        latestEngineStatus === "on" || latestEngineStatus === "off"
+          ? latestEngineStatus
+          : "unknown",
       batteryVoltageLevel:
         typeof latestVoltageLevel === "number" &&
         Number.isInteger(latestVoltageLevel)
@@ -487,6 +730,66 @@ export async function fetchGpsHistory({
       startAt: effectiveStartAt,
       endAt: normalizeOptionalTimestamp(effectiveEndAt),
       latestServerReceivedAt: normalizeTimestamp(effectiveStartAt),
+    };
+  }
+}
+
+export async function fetchLatestGpsLocation({
+  imei,
+}: {
+  imei?: string;
+}): Promise<GpsHistoryDataset> {
+  const effectiveImei = imei?.trim() || DEFAULT_IMEI;
+  const fallbackTimestamp = new Date().toISOString();
+
+  try {
+    const requestUrl = `${GPS_HISTORY_API_BASE_URL}/devices/${encodeURIComponent(effectiveImei)}/locations/latest`;
+    const response = await fetch(requestUrl, { cache: "no-store" });
+
+    if (!response.ok) {
+      return {
+        status: "error",
+        message: `API request failed with status ${response.status}.`,
+        points: [],
+        imei: effectiveImei,
+        startAt: fallbackTimestamp,
+        latestServerReceivedAt: fallbackTimestamp,
+      };
+    }
+
+    const payload: unknown = await response.json();
+
+    if (!isApiResponse(payload)) {
+      return {
+        status: "error",
+        message: "API response did not match the expected latest GPS format.",
+        points: [],
+        imei: effectiveImei,
+        startAt: fallbackTimestamp,
+        latestServerReceivedAt: fallbackTimestamp,
+      };
+    }
+
+    return {
+      status: "ready",
+      points: sortPoints(
+        payload.points.map((point, index) => toPoint(payload.imei, point, index)),
+      ),
+      imei: payload.imei,
+      startAt: normalizeTimestamp(payload.start_at),
+      latestServerReceivedAt: resolveLatestServerReceivedAt(payload),
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message:
+        error instanceof Error
+          ? `Failed to fetch the latest GPS location from ${GPS_HISTORY_API_BASE_URL}: ${error.message}`
+          : "Failed to fetch the latest GPS location from the API.",
+      points: [],
+      imei: effectiveImei,
+      startAt: fallbackTimestamp,
+      latestServerReceivedAt: fallbackTimestamp,
     };
   }
 }
