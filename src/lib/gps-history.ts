@@ -4,6 +4,10 @@ import type {
   DeviceActivity,
   DeviceServiceApiResponse,
   DeviceServiceSummary,
+  FuelCalibrationApiResponse,
+  FuelCalibrationApiResult,
+  FuelCalibrationDashboard,
+  FuelCalibrationResult,
   GpsHistoryApiResponse,
   GpsHistoryDataset,
   GpsHistoryPoint,
@@ -592,6 +596,254 @@ export async function fetchDeviceServiceSummary(
       ...emptySummary,
     };
   }
+}
+
+function isFuelCalibrationApiResult(
+  value: unknown,
+): value is FuelCalibrationApiResult {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.id === "number" &&
+    typeof record.started_at === "string" &&
+    typeof record.completed_at === "string" &&
+    typeof record.start_distance_km === "number" &&
+    typeof record.end_distance_km === "number" &&
+    typeof record.distance_traveled_km === "number" &&
+    typeof record.liters === "number" &&
+    (record.total_cost_idr === undefined ||
+      record.total_cost_idr === null ||
+      typeof record.total_cost_idr === "number") &&
+    (record.fuel_type === undefined ||
+      record.fuel_type === null ||
+      typeof record.fuel_type === "string") &&
+    typeof record.efficiency_km_per_liter === "number" &&
+    (record.cost_per_km_idr === undefined ||
+      record.cost_per_km_idr === null ||
+      typeof record.cost_per_km_idr === "number") &&
+    typeof record.riding_seconds === "number" &&
+    typeof record.engine_on_seconds === "number" &&
+    typeof record.trip_count === "number"
+  );
+}
+
+function isFuelCalibrationApiResponse(
+  value: unknown,
+): value is FuelCalibrationApiResponse {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  const active = record.active_calibration;
+  const activeIsValid =
+    active === undefined ||
+    active === null ||
+    (typeof active === "object" &&
+      typeof (active as Record<string, unknown>).id === "number" &&
+      typeof (active as Record<string, unknown>).started_at === "string" &&
+      typeof (active as Record<string, unknown>).start_distance_km ===
+        "number" &&
+      typeof (active as Record<string, unknown>).current_distance_km ===
+        "number" &&
+      typeof (active as Record<string, unknown>).distance_traveled_km ===
+        "number" &&
+      typeof (active as Record<string, unknown>).riding_seconds === "number" &&
+      typeof (active as Record<string, unknown>).engine_on_seconds ===
+        "number" &&
+      typeof (active as Record<string, unknown>).trip_count === "number" &&
+      typeof (active as Record<string, unknown>).elapsed_days === "number");
+  const latest = record.latest_result;
+
+  return (
+    typeof record.imei === "string" &&
+    record.timezone === "Asia/Jakarta" &&
+    typeof record.generated_at === "string" &&
+    (record.state === "not_started" ||
+      record.state === "active" ||
+      record.state === "completed") &&
+    activeIsValid &&
+    (latest === undefined ||
+      latest === null ||
+      isFuelCalibrationApiResult(latest)) &&
+    Array.isArray(record.history) &&
+    record.history.every(isFuelCalibrationApiResult)
+  );
+}
+
+function mapFuelCalibrationResult(
+  result: FuelCalibrationApiResult,
+): FuelCalibrationResult {
+  return {
+    id: result.id,
+    startedAt: normalizeTimestamp(result.started_at),
+    completedAt: normalizeTimestamp(result.completed_at),
+    startDistanceKm: result.start_distance_km,
+    endDistanceKm: result.end_distance_km,
+    distanceTraveledKm: result.distance_traveled_km,
+    liters: result.liters,
+    totalCostIdr: result.total_cost_idr ?? undefined,
+    fuelType: result.fuel_type ?? undefined,
+    efficiencyKmPerLiter: result.efficiency_km_per_liter,
+    costPerKmIdr: result.cost_per_km_idr ?? undefined,
+    ridingSeconds: result.riding_seconds,
+    engineOnSeconds: result.engine_on_seconds,
+    tripCount: result.trip_count,
+  };
+}
+
+function mapFuelCalibrationDashboard(
+  payload: FuelCalibrationApiResponse,
+): FuelCalibrationDashboard {
+  const active = payload.active_calibration;
+
+  return {
+    status: "ready",
+    imei: payload.imei,
+    timezone: "Asia/Jakarta",
+    generatedAt: normalizeTimestamp(payload.generated_at),
+    state: payload.state,
+    activeCalibration: active
+      ? {
+          id: active.id,
+          startedAt: normalizeTimestamp(active.started_at),
+          startDistanceKm: active.start_distance_km,
+          currentDistanceKm: active.current_distance_km,
+          distanceTraveledKm: active.distance_traveled_km,
+          ridingSeconds: active.riding_seconds,
+          engineOnSeconds: active.engine_on_seconds,
+          tripCount: active.trip_count,
+          elapsedDays: active.elapsed_days,
+          fuelType: active.fuel_type ?? undefined,
+        }
+      : undefined,
+    latestResult: payload.latest_result
+      ? mapFuelCalibrationResult(payload.latest_result)
+      : undefined,
+    history: payload.history.map(mapFuelCalibrationResult),
+  };
+}
+
+function emptyFuelCalibrationDashboard(
+  imei: string,
+  message: string,
+): FuelCalibrationDashboard {
+  return {
+    status: "error",
+    message,
+    imei,
+    timezone: "Asia/Jakarta",
+    generatedAt: new Date().toISOString(),
+    state: "not_started",
+    history: [],
+  };
+}
+
+async function requestFuelCalibration(
+  imei: string,
+  path: string,
+  init?: RequestInit,
+): Promise<FuelCalibrationDashboard> {
+  try {
+    const response = await fetch(
+      `${GPS_HISTORY_API_BASE_URL}/devices/${encodeURIComponent(imei)}${path}`,
+      { cache: "no-store", ...init },
+    );
+
+    if (!response.ok) {
+      const errorPayload = (await response.json().catch(() => null)) as {
+        error?: unknown;
+      } | null;
+      const message =
+        typeof errorPayload?.error === "string"
+          ? errorPayload.error
+          : `API request failed with status ${response.status}.`;
+      return emptyFuelCalibrationDashboard(imei, message);
+    }
+
+    const payload: unknown = await response.json();
+    return isFuelCalibrationApiResponse(payload)
+      ? mapFuelCalibrationDashboard(payload)
+      : emptyFuelCalibrationDashboard(
+          imei,
+          "API response did not match the expected fuel calibration format.",
+        );
+  } catch (error) {
+    return emptyFuelCalibrationDashboard(
+      imei,
+      error instanceof Error
+        ? `Failed to fetch fuel calibration data: ${error.message}`
+        : "Failed to fetch fuel calibration data.",
+    );
+  }
+}
+
+export async function fetchFuelCalibrationDashboard(
+  imei?: string,
+): Promise<FuelCalibrationDashboard> {
+  const effectiveImei = imei?.trim() || DEFAULT_IMEI;
+  return requestFuelCalibration(effectiveImei, "/fuel-calibrations");
+}
+
+export async function startFuelCalibration({
+  imei,
+  fuelType,
+}: {
+  imei: string;
+  fuelType?: string;
+}) {
+  return requestFuelCalibration(imei, "/fuel-calibrations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fuel_type: fuelType || null }),
+  });
+}
+
+export async function restartFuelCalibration({
+  imei,
+  fuelType,
+}: {
+  imei: string;
+  fuelType?: string;
+}) {
+  return requestFuelCalibration(imei, "/fuel-calibrations/restart", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fuel_type: fuelType || null }),
+  });
+}
+
+export async function completeFuelCalibration({
+  imei,
+  calibrationId,
+  liters,
+  totalCostIdr,
+  fuelType,
+}: {
+  imei: string;
+  calibrationId: number;
+  liters: number;
+  totalCostIdr?: number;
+  fuelType?: string;
+}) {
+  return requestFuelCalibration(
+    imei,
+    `/fuel-calibrations/${calibrationId}/complete`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        liters,
+        total_cost_idr: totalCostIdr ?? null,
+        fuel_type: fuelType || null,
+        tank_full: true,
+        no_missed_refuels: true,
+      }),
+    },
+  );
 }
 
 export async function fetchDeviceActivity(

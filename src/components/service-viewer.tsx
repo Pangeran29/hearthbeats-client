@@ -88,6 +88,15 @@ function ServiceIcon() {
   );
 }
 
+function FuelIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 21V4a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v17M3 21h15" />
+      <path d="M8 6h5v4H8zM16 7h2l2 2v7a2 2 0 0 0 2 2V9l-2-2" />
+    </svg>
+  );
+}
+
 function BatteryIcon({ level }: { level?: number }) {
   const normalizedLevel =
     typeof level === "number" ? Math.min(6, Math.max(0, level)) : 0;
@@ -154,6 +163,7 @@ export function ServiceViewer({
   const liveHref = `/live-tracking/${encodedImei}`;
   const historyHref = `${liveHref}/history`;
   const serviceHref = `${liveHref}/service`;
+  const fuelHref = `${liveHref}/fuel`;
   const intervalProgress = Math.min(
     100,
     Math.max(0, 100 - (summary.distanceRemainingKm / 1_000) * 100),
@@ -360,6 +370,10 @@ export function ServiceViewer({
           >
             <ServiceIcon />
             <span>Servis</span>
+          </Link>
+          <Link href={fuelHref}>
+            <FuelIcon />
+            <span>BBM</span>
           </Link>
         </nav>
       </section>

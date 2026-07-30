@@ -29,7 +29,7 @@ Heartbeats combines a motorcycle-installed GPS tracker, Telegram-delivered acces
 - The Telegram link opens the Live screen by default.
 - The primary device is a phone used in portrait orientation.
 - The website may be opened on desktop, but the customer experience remains a centered, mobile-width application instead of expanding into a desktop dashboard.
-- Live tracking and tracking history are separate screens available from persistent navigation.
+- Live tracking, tracking history, service recommendations, and BBM calibration are separate screens available from persistent navigation.
 - Tracking history uses a date-range input rather than requiring customers to enter exact start and end times.
 - Location freshness and the selected date range must remain clear while the customer interacts with the map.
 

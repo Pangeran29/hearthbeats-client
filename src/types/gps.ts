@@ -175,3 +175,83 @@ export type DeviceServiceApiResponse = {
     recommendation_items: string[];
   }>;
 };
+
+export type FuelCalibrationProgress = {
+  id: number;
+  startedAt: string;
+  startDistanceKm: number;
+  currentDistanceKm: number;
+  distanceTraveledKm: number;
+  ridingSeconds: number;
+  engineOnSeconds: number;
+  tripCount: number;
+  elapsedDays: number;
+  fuelType?: string;
+};
+
+export type FuelCalibrationResult = {
+  id: number;
+  startedAt: string;
+  completedAt: string;
+  startDistanceKm: number;
+  endDistanceKm: number;
+  distanceTraveledKm: number;
+  liters: number;
+  totalCostIdr?: number;
+  fuelType?: string;
+  efficiencyKmPerLiter: number;
+  costPerKmIdr?: number;
+  ridingSeconds: number;
+  engineOnSeconds: number;
+  tripCount: number;
+};
+
+export type FuelCalibrationDashboard = {
+  status: "ready" | "error";
+  message?: string;
+  imei: string;
+  timezone: "Asia/Jakarta";
+  generatedAt: string;
+  state: "not_started" | "active" | "completed";
+  activeCalibration?: FuelCalibrationProgress;
+  latestResult?: FuelCalibrationResult;
+  history: FuelCalibrationResult[];
+};
+
+export type FuelCalibrationApiResponse = {
+  imei: string;
+  timezone: string;
+  generated_at: string;
+  state: "not_started" | "active" | "completed";
+  active_calibration?: {
+    id: number;
+    started_at: string;
+    start_distance_km: number;
+    current_distance_km: number;
+    distance_traveled_km: number;
+    riding_seconds: number;
+    engine_on_seconds: number;
+    trip_count: number;
+    elapsed_days: number;
+    fuel_type?: string | null;
+  } | null;
+  latest_result?: FuelCalibrationApiResult | null;
+  history: FuelCalibrationApiResult[];
+};
+
+export type FuelCalibrationApiResult = {
+  id: number;
+  started_at: string;
+  completed_at: string;
+  start_distance_km: number;
+  end_distance_km: number;
+  distance_traveled_km: number;
+  liters: number;
+  total_cost_idr?: number | null;
+  fuel_type?: string | null;
+  efficiency_km_per_liter: number;
+  cost_per_km_idr?: number | null;
+  riding_seconds: number;
+  engine_on_seconds: number;
+  trip_count: number;
+};

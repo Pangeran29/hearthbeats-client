@@ -322,6 +322,15 @@ function ServiceIcon() {
   );
 }
 
+function FuelIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 21V4a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v17M3 21h15" />
+      <path d="M8 6h5v4H8zM16 7h2l2 2v7a2 2 0 0 0 2 2V9l-2-2" />
+    </svg>
+  );
+}
+
 function HeartbeatMark() {
   return (
     <svg
@@ -596,6 +605,7 @@ export function LiveTrackingViewer({
   const historyHref = `/live-tracking/${encodeURIComponent(dataset.imei)}/history`;
   const liveHref = `/live-tracking/${encodeURIComponent(dataset.imei)}`;
   const serviceHref = `/live-tracking/${encodeURIComponent(dataset.imei)}/service`;
+  const fuelHref = `/live-tracking/${encodeURIComponent(dataset.imei)}/fuel`;
   const latestCoordinates = latestPoint
     ? `${formatCoordinate(latestPoint.latitude)}, ${formatCoordinate(
         latestPoint.longitude,
@@ -1154,6 +1164,10 @@ export function LiveTrackingViewer({
           <Link href={serviceHref}>
             <ServiceIcon />
             <span>Servis</span>
+          </Link>
+          <Link href={fuelHref}>
+            <FuelIcon />
+            <span>BBM</span>
           </Link>
         </nav>
         {selectedSession?.state === "completed" && points.length > 1 ? (

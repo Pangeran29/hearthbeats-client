@@ -152,7 +152,7 @@ The palette uses warm paper neutrals and charcoal ink, with orange reserved for 
 
 The application fills the available phone viewport and remains a centered mobile canvas on wider screens. The production maximum width is provisionally `480px`; desktop space outside the application uses Warm Canvas and does not introduce a desktop-specific layout.
 
-The map owns the primary tracking viewport. A compact safe-area header floats or sits above it, and a draggable bottom sheet reveals details while maintaining visibility of the selected motorcycle or route. Persistent navigation contains exactly three primary destinations: Live, History, and Service.
+The map owns the primary tracking viewport. A compact safe-area header floats or sits above it, and a draggable bottom sheet reveals details while maintaining visibility of the selected motorcycle or route. Persistent navigation contains four primary destinations: Live, History, Service, and BBM.
 
 Spacing follows a 4px base rhythm. Primary screen edges use 16px padding. Common internal gaps use 8px or 12px; distinct sections use 16px or 24px. Controls are at least 44px tall, with 48px as the standard.
 
