@@ -379,6 +379,14 @@ export function FuelCalibrationViewer({
               <div className={styles.onboardingCopy}>
                 <h2>Kenali konsumsi BBM motor</h2>
                 <p>Ukur berdasarkan dua kali pengisian tangki penuh.</p>
+                <div className={styles.fuelRule}>
+                  <span aria-hidden="true">i</span>
+                  <p>
+                    <strong>Tangki tidak perlu kosong.</strong> Jika BBM masih
+                    tersisa, isi sampai penuh lalu mulai kalibrasi. Liter pada
+                    pengisian pertama tidak perlu dicatat.
+                  </p>
+                </div>
                 <ol>
                   <li>
                     <strong>Isi penuh untuk memulai</strong>
@@ -650,6 +658,15 @@ export function FuelCalibrationViewer({
                     ? "Kalibrasi aktif dibatalkan dan checkpoint pertama diganti dengan pengisian penuh saat ini."
                   : "Masukkan BBM pada pengisian penuh kedua."}
               </p>
+              {sheet !== "complete" ? (
+                <div className={styles.sheetFuelRule}>
+                  <span aria-hidden="true">i</span>
+                  <p>
+                    Tangki tidak perlu kosong. Isi BBM yang masih tersisa sampai
+                    penuh; jumlah liter pertama tidak perlu dimasukkan.
+                  </p>
+                </div>
+              ) : null}
               <form
                 onSubmit={sheet === "complete" ? handleComplete : handleStart}
               >
@@ -714,7 +731,7 @@ export function FuelCalibrationViewer({
                     checked={tankFull}
                     onChange={(event) => setTankFull(event.target.checked)}
                   />
-                  <span>Tangki sudah penuh</span>
+                  <span>Tangki sudah diisi sampai penuh</span>
                 </label>
                 {sheet === "complete" ? (
                   <label className={styles.checkRow}>
