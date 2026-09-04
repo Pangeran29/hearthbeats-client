@@ -69,7 +69,7 @@ export default function Home() {
                   <p>Monitoring motor berjalan tenang setiap hari.</p>
                 </div>
                 <div className={styles.planDetails}>
-                  <strong>Rp 35.000</strong>
+                  <strong>Rp 40.000</strong>
                   <span>/bulan</span>
                   <p>Termasuk aplikasi, server, dan koneksi data perangkat.</p>
                 </div>
