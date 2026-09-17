@@ -103,6 +103,25 @@ Roadbook character comes from warm paper neutrals, route-orange wayfinding, conc
 - Large readable metrics and compact journey-log details.
 - Mobile composition preserved on every viewport.
 
+## Marketing Surface
+
+The root landing page uses **Heartbeats Calm Assurance**, a persuasive extension of
+the product system built from the approved campaign imagery. It keeps the same warm
+paper, charcoal, route orange, and direct Indonesian voice, but makes forest green
+the dominant brand field to communicate reassurance and trust.
+
+- Lead with tangible proof: the physical tracker, real application screens, maps,
+  Telegram notifications, and actual product capabilities.
+- Use oversized editorial sans-serif headlines and asymmetric product compositions;
+  avoid generic SaaS card grids and dashboard layouts.
+- Green owns large marketing surfaces. Orange remains reserved for WhatsApp CTAs,
+  route movement, and intentional actions.
+- Critical marketing copy must remain semantic HTML. Campaign images support the
+  story but never become the only source of feature information.
+- Unreleased capabilities must be labeled `Segera hadir` and must not read as
+  currently available.
+- The primary conversion action is a WhatsApp conversation.
+
 ## Colors
 
 The palette uses warm paper neutrals and charcoal ink, with orange reserved for navigation, route emphasis, and primary action.

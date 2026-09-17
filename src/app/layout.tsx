@@ -15,8 +15,9 @@ const barlowCondensed = Barlow_Condensed({
 });
 
 export const metadata: Metadata = {
-  title: "Heartbeats GPS Tracker",
-  description: "Landing page and GPS history viewer for Heartbeats motor monitoring.",
+  title: "Heartbeats GPS Tracker | Motor Terpantau, Pikiran Lebih Tenang",
+  description:
+    "Pantau lokasi motor, dapatkan notifikasi mesin, simpan riwayat perjalanan, dan pahami penggunaan motor bersama Heartbeats.",
   icons: {
     icon: "/46d3030f-e152-4906-9474-13123536acbf.jpg",
   },
